@@ -54,11 +54,11 @@ class ApiService {
           ? configuredUrl.substring(0, configuredUrl.length - 1)
           : configuredUrl;
     }
-    if (kIsWeb) return 'http://localhost:8080';
+    if (kIsWeb) return 'http://localhost:8081';
     if (defaultTargetPlatform == TargetPlatform.android) {
-      return 'http://10.0.2.2:8080';
+      return 'http://10.0.2.2:8081';
     }
-    return 'http://localhost:8080';
+    return 'http://localhost:8081';
   }
 
   final FlutterSecureStorage _storage;
