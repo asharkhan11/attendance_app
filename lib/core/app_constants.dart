@@ -20,6 +20,10 @@ abstract final class AppConstants {
   /// layout measurement and significantly improves scroll performance.
   static const double kRosterItemExtent = 68.0;
 
+  /// Pixel distance to pre-render beyond the visible viewport.
+  /// Start at 400.0 and tune in Phase 9 profiling based on memory vs jank.
+  static const double kListCacheExtent = 400.0;
+
   // ---------------------------------------------------------------------------
   // Business rules
   // ---------------------------------------------------------------------------

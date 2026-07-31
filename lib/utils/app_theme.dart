@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../design_system/attendance_theme.dart';
 
 class AppTheme {
   // Prevent instantiation
@@ -26,6 +27,7 @@ class AppTheme {
       brightness: Brightness.light,
       primaryColor: primary,
       scaffoldBackgroundColor: background,
+      extensions: const [AttendanceTheme.light],
 
       // Color Scheme configuration
       colorScheme: const ColorScheme(
