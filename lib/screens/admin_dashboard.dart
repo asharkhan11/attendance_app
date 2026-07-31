@@ -9,6 +9,11 @@ import '../services/download_helper.dart';
 import '../widgets/searchable_dropdown.dart';
 import '../widgets/profile_modal.dart';
 
+import '../design_system/app_breakpoints.dart';
+import '../design_system/app_spacing.dart';
+import '../features/admin/presentation/widgets/admin_navigation.dart';
+import '../features/admin/presentation/widgets/analytics_filter_sheet.dart';
+
 // ─── Admin Dashboard ────────────────────────────────────────────────────────────
 
 class AdminDashboard extends StatefulWidget {
@@ -97,11 +102,9 @@ class _AdminDashboardState extends State<AdminDashboard> {
     );
   }
 
-
-
   @override
   Widget build(BuildContext context) {
-    final isWide = MediaQuery.of(context).size.width > 720;
+    final isMobile = context.isMobile;
 
     final tabs = [
       _AcademicSessionsTab(
@@ -146,32 +149,22 @@ class _AdminDashboardState extends State<AdminDashboard> {
         selectedYear: _selectedYear,
         snack: _snack,
       ),
-      _SchoolDaysTab(
-        api: _api,
-        selectedYear: _selectedYear,
-        snack: _snack,
-      ),
+      _SchoolDaysTab(api: _api, selectedYear: _selectedYear, snack: _snack),
     ];
 
-    const destinations = [
-      NavigationDestination(icon: Icon(Icons.date_range), label: 'Sessions'),
-      NavigationDestination(icon: Icon(Icons.analytics), label: 'Analytics'),
-      NavigationDestination(icon: Icon(Icons.class_), label: 'Classes'),
-      NavigationDestination(icon: Icon(Icons.people), label: 'Teachers'),
-      NavigationDestination(icon: Icon(Icons.school), label: 'Students'),
-      NavigationDestination(icon: Icon(Icons.download), label: 'Reports'),
-      NavigationDestination(icon: Icon(Icons.calendar_month), label: 'School Days'),
-    ];
-
-    return Scaffold(
+    Widget content = Scaffold(
       appBar: AppBar(
-        title: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text('Admin Dashboard'),
-            if (_years.isNotEmpty) ...[
-              const SizedBox(width: 16),
-              Container(
+        title: Text(
+          isMobile ? 'Admin Portal' : 'Admin Dashboard & Management Portal',
+        ),
+        actions: [
+          if (!isMobile && _years.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(
+                vertical: 8.0,
+                horizontal: 4.0,
+              ),
+              child: Container(
                 padding: const EdgeInsets.symmetric(
                   horizontal: 10,
                   vertical: 2,
@@ -211,14 +204,12 @@ class _AdminDashboardState extends State<AdminDashboard> {
                   ),
                 ),
               ),
-            ],
-          ],
-        ),
-        actions: [
+            ),
           IconButton(
             icon: const Icon(Icons.person_outline),
             tooltip: 'My Profile & Security',
-            onPressed: () => ProfileModal.show(context, onProfileUpdated: _loadSharedData),
+            onPressed: () =>
+                ProfileModal.show(context, onProfileUpdated: _loadSharedData),
           ),
           IconButton(
             icon: const Icon(Icons.refresh),
@@ -235,53 +226,66 @@ class _AdminDashboardState extends State<AdminDashboard> {
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
-          : isWide
-          ? Row(
+          : Column(
               children: [
-                NavigationRail(
-                  selectedIndex: _selectedIndex,
-                  onDestinationSelected: (i) =>
-                      setState(() => _selectedIndex = i),
-                  labelType: NavigationRailLabelType.all,
-                  destinations: const [
-                    NavigationRailDestination(
-                      icon: Icon(Icons.date_range),
-                      label: Text('Sessions'),
+                // Mobile Academic Year Banner Selector
+                if (isMobile && _years.isNotEmpty)
+                  Container(
+                    width: double.infinity,
+                    color: Theme.of(
+                      context,
+                    ).primaryColor.withValues(alpha: 0.05),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: AppSpacing.md,
+                      vertical: AppSpacing.xs,
                     ),
-                    NavigationRailDestination(
-                      icon: Icon(Icons.analytics),
-                      label: Text('Analytics'),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text(
+                          'Academic Year:',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w600,
+                            fontSize: 12,
+                          ),
+                        ),
+                        DropdownButtonHideUnderline(
+                          child: DropdownButton<AcademicYear>(
+                            value: _selectedYear,
+                            isDense: true,
+                            style: const TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.blue,
+                            ),
+                            items: _years.map((y) {
+                              return DropdownMenuItem<AcademicYear>(
+                                value: y,
+                                child: Text(
+                                  '${y.name}${y.isCurrent ? ' (Active)' : ''}',
+                                ),
+                              );
+                            }).toList(),
+                            onChanged: (v) {
+                              if (v != null) {
+                                setState(() => _selectedYear = v);
+                                _loadSharedData();
+                              }
+                            },
+                          ),
+                        ),
+                      ],
                     ),
-                    NavigationRailDestination(
-                      icon: Icon(Icons.class_),
-                      label: Text('Classes'),
-                    ),
-                    NavigationRailDestination(
-                      icon: Icon(Icons.people),
-                      label: Text('Teachers'),
-                    ),
-                    NavigationRailDestination(
-                      icon: Icon(Icons.school),
-                      label: Text('Students'),
-                    ),
-                    NavigationRailDestination(
-                      icon: Icon(Icons.download),
-                      label: Text('Reports'),
-                    ),
-                  ],
-                ),
-                const VerticalDivider(thickness: 1, width: 1),
+                  ),
                 Expanded(child: tabs[_selectedIndex]),
               ],
-            )
-          : tabs[_selectedIndex],
-      bottomNavigationBar: isWide
-          ? null
-          : NavigationBar(
-              selectedIndex: _selectedIndex,
-              onDestinationSelected: (i) => setState(() => _selectedIndex = i),
-              destinations: destinations,
             ),
+    );
+
+    return AdminNavigation(
+      selectedIndex: _selectedIndex,
+      onDestinationSelected: (i) => setState(() => _selectedIndex = i),
+      body: content,
     );
   }
 }
@@ -306,7 +310,11 @@ class _AnalyticsTab extends StatefulWidget {
   State<_AnalyticsTab> createState() => _AnalyticsTabState();
 }
 
-class _AnalyticsTabState extends State<_AnalyticsTab> {
+class _AnalyticsTabState extends State<_AnalyticsTab>
+    with AutomaticKeepAliveClientMixin {
+  @override
+  bool get wantKeepAlive => true;
+
   SchoolClass? _selectedClass; // null = All Classes (School-Wide)
   String _datePreset = 'month'; // 'week', 'month', '90days', 'all'
   double _threshold = 75;
@@ -479,6 +487,7 @@ class _AnalyticsTabState extends State<_AnalyticsTab> {
 
   @override
   Widget build(BuildContext context) {
+    super.build(context);
     if (widget.selectedYear == null) {
       return Center(
         child: Column(
@@ -605,22 +614,44 @@ class _AnalyticsTabState extends State<_AnalyticsTab> {
                 runSpacing: 12,
                 crossAxisAlignment: WrapCrossAlignment.center,
                 children: [
-                  SizedBox(
-                    width: 220,
-                    child: SearchableDropdown<SchoolClass?>(
-                      value: _selectedClass,
-                      labelText: 'Class Scope',
-                      isDense: true,
-                      items: [null, ...widget.classes],
-                      itemAsString: (c) => c == null
-                          ? '🏫 All Classes (School-Wide)'
-                          : c.displayName,
-                      onChanged: (v) {
-                        setState(() => _selectedClass = v);
-                        _loadAllAnalytics();
-                      },
+                  if (context.isMobile)
+                    OutlinedButton.icon(
+                      icon: const Icon(Icons.filter_list),
+                      label: const Text('Analytics Filters'),
+                      onPressed: () => AnalyticsFilterSheet.show(
+                        context,
+                        classes: widget.classes,
+                        selectedClass: _selectedClass,
+                        threshold: _threshold,
+                        onClassChanged: (c) {
+                          setState(() => _selectedClass = c);
+                          _loadAllAnalytics();
+                        },
+                        onThresholdChanged: (t) {
+                          setState(() => _threshold = t);
+                          _loadAllAnalytics();
+                        },
+                      ),
+                    )
+                  else ...[
+                    SizedBox(
+                      width: 220,
+                      child: SearchableDropdown<SchoolClass?>(
+                        value: _selectedClass,
+                        labelText: 'Class Scope',
+                        isDense: true,
+                        items: [null, ...widget.classes],
+                        itemAsString: (c) => c == null
+                            ? '🏫 All Classes (School-Wide)'
+                            : c.displayName,
+                        onChanged: (v) {
+                          setState(() => _selectedClass = v);
+                          _loadAllAnalytics();
+                        },
+                      ),
                     ),
-                  ),
+                  ],
+
                   DropdownButton<String>(
                     value: _datePreset,
                     isDense: true,
@@ -733,538 +764,6 @@ class _AnalyticsTabState extends State<_AnalyticsTab> {
               ),
             ),
           ),
-          const SizedBox(height: 20),
-
-          if (_loading)
-            const Center(
-              child: Padding(
-                padding: EdgeInsets.all(40),
-                child: CircularProgressIndicator(),
-              ),
-            )
-          else ...[
-            // KPI Summary Cards Deck
-            LayoutBuilder(
-              builder: (context, constraints) {
-                final isWide = constraints.maxWidth > 700;
-                return Wrap(
-                  spacing: 12,
-                  runSpacing: 12,
-                  children: [
-                    _kpiCard(
-                      _selectedClass == null
-                          ? 'School Attendance Rate'
-                          : 'Class Attendance Rate',
-                      '${overallPct.toStringAsFixed(1)}%',
-                      Icons.check_circle_outline,
-                      overallPct >= 85 ? Colors.green : Colors.orange,
-                      isWide,
-                    ),
-                    _kpiCard(
-                      _selectedClass == null
-                          ? 'Enrolled Students'
-                          : 'Class Enrolled Students',
-                      '$totalStudents',
-                      Icons.people_outline,
-                      Colors.blue,
-                      isWide,
-                    ),
-                    _kpiCard(
-                      'Sessions Conducted',
-                      '$totalSessions',
-                      Icons.event_available,
-                      Colors.purple,
-                      isWide,
-                    ),
-                    _kpiCard(
-                      'Defaulters (< ${_threshold.toStringAsFixed(0)}%)',
-                      '$totalDefaulters',
-                      Icons.warning_amber_rounded,
-                      totalDefaulters > 0 ? Colors.red : Colors.green,
-                      isWide,
-                    ),
-                  ],
-                );
-              },
-            ),
-            const SizedBox(height: 24),
-
-            // Visual Charts Section
-            LayoutBuilder(
-              builder: (context, constraints) {
-                final isDesktop = constraints.maxWidth > 900;
-                return Flex(
-                  direction: isDesktop ? Axis.horizontal : Axis.vertical,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Class Comparison Bar Chart
-                    Expanded(
-                      flex: isDesktop ? 1 : 0,
-                      child: Card(
-                        child: Padding(
-                          padding: const EdgeInsets.all(16),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                _selectedClass == null
-                                    ? 'Class-wise Attendance Comparison'
-                                    : 'Attendance Rate (${_selectedClass!.displayName})',
-                                style: Theme.of(context).textTheme.titleMedium
-                                    ?.copyWith(fontWeight: FontWeight.bold),
-                              ),
-                              const SizedBox(height: 6),
-                              Text(
-                                _selectedClass == null
-                                    ? 'Comparative attendance percentage across all classes'
-                                    : 'Attendance percentage breakdown for ${_selectedClass!.displayName}',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: Colors.grey.shade600,
-                                ),
-                              ),
-                              const SizedBox(height: 20),
-                              SizedBox(
-                                height: 240,
-                                child: barComparisons.isEmpty
-                                    ? const Center(
-                                        child: Text(
-                                          'No class comparison data available',
-                                        ),
-                                      )
-                                    : BarChart(
-                                        BarChartData(
-                                          alignment:
-                                              BarChartAlignment.spaceAround,
-                                          maxY: 100,
-                                          barTouchData: BarTouchData(
-                                            enabled: true,
-                                          ),
-                                          titlesData: FlTitlesData(
-                                            show: true,
-                                            bottomTitles: AxisTitles(
-                                              sideTitles: SideTitles(
-                                                showTitles: true,
-                                                getTitlesWidget: (val, meta) {
-                                                  final idx = val.toInt();
-                                                  if (idx >= 0 &&
-                                                      idx <
-                                                          barComparisons
-                                                              .length) {
-                                                    final name =
-                                                        barComparisons[idx]['class_name'] ??
-                                                        '';
-                                                    return Padding(
-                                                      padding:
-                                                          const EdgeInsets.only(
-                                                            top: 6,
-                                                          ),
-                                                      child: Text(
-                                                        name
-                                                            .toString()
-                                                            .replaceAll(
-                                                              'Grade ',
-                                                              '',
-                                                            ),
-                                                        style: const TextStyle(
-                                                          fontSize: 10,
-                                                          fontWeight:
-                                                              FontWeight.bold,
-                                                        ),
-                                                      ),
-                                                    );
-                                                  }
-                                                  return const Text('');
-                                                },
-                                              ),
-                                            ),
-                                            leftTitles: AxisTitles(
-                                              sideTitles: SideTitles(
-                                                showTitles: true,
-                                                reservedSize: 30,
-                                                getTitlesWidget: (v, meta) =>
-                                                    Text(
-                                                      '${v.toInt()}%',
-                                                      style: const TextStyle(
-                                                        fontSize: 10,
-                                                      ),
-                                                    ),
-                                              ),
-                                            ),
-                                            topTitles: const AxisTitles(
-                                              sideTitles: SideTitles(
-                                                showTitles: false,
-                                              ),
-                                            ),
-                                            rightTitles: const AxisTitles(
-                                              sideTitles: SideTitles(
-                                                showTitles: false,
-                                              ),
-                                            ),
-                                          ),
-                                          gridData: const FlGridData(
-                                            show: true,
-                                            drawVerticalLine: false,
-                                          ),
-                                          borderData: FlBorderData(show: false),
-                                          barGroups: List.generate(
-                                            barComparisons.length,
-                                            (i) {
-                                              final pct =
-                                                  (barComparisons[i]['attendance_percentage']
-                                                          as num?)
-                                                      ?.toDouble() ??
-                                                  0.0;
-                                              return BarChartGroupData(
-                                                x: i,
-                                                barRods: [
-                                                  BarChartRodData(
-                                                    toY: pct,
-                                                    color: pct >= 85
-                                                        ? Colors.blue.shade600
-                                                        : (pct >= 75
-                                                              ? Colors.orange
-                                                              : Colors.red),
-                                                    width: 16,
-                                                    borderRadius:
-                                                        const BorderRadius.vertical(
-                                                          top: Radius.circular(
-                                                            4,
-                                                          ),
-                                                        ),
-                                                  ),
-                                                ],
-                                              );
-                                            },
-                                          ),
-                                        ),
-                                      ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                    if (isDesktop)
-                      const SizedBox(width: 16)
-                    else
-                      const SizedBox(height: 16),
-
-                    // Attendance Trend Line Chart
-                    Expanded(
-                      flex: isDesktop ? 1 : 0,
-                      child: Card(
-                        child: Padding(
-                          padding: const EdgeInsets.all(16),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                _selectedClass != null
-                                    ? 'Attendance Trend (${_selectedClass!.displayName})'
-                                    : 'Attendance Overview Distribution (School-Wide)',
-                                style: Theme.of(context).textTheme.titleMedium
-                                    ?.copyWith(fontWeight: FontWeight.bold),
-                              ),
-                              const SizedBox(height: 6),
-                              Text(
-                                'Weekly attendance percentage trend over time',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: Colors.grey.shade600,
-                                ),
-                              ),
-                              const SizedBox(height: 20),
-                              SizedBox(
-                                height: 240,
-                                child: _trendData.isEmpty
-                                    ? Center(
-                                        child: Column(
-                                          mainAxisAlignment:
-                                              MainAxisAlignment.center,
-                                          children: [
-                                            Icon(
-                                              Icons.show_chart,
-                                              size: 40,
-                                              color: Colors.grey.shade400,
-                                            ),
-                                            const SizedBox(height: 8),
-                                            const Text(
-                                              'No time-series data in this date range',
-                                              style: TextStyle(
-                                                color: Colors.grey,
-                                                fontSize: 13,
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      )
-                                    : LineChart(
-                                        LineChartData(
-                                          maxY: 100,
-                                          minY: 0,
-                                          gridData: const FlGridData(
-                                            show: true,
-                                          ),
-                                          titlesData: FlTitlesData(
-                                            bottomTitles: AxisTitles(
-                                              sideTitles: SideTitles(
-                                                showTitles: true,
-                                                interval: 1,
-                                                getTitlesWidget: (val, meta) {
-                                                  final idx = val.toInt();
-                                                  if (val == idx.toDouble() &&
-                                                      idx >= 0 &&
-                                                      idx < _trendData.length) {
-                                                    final item =
-                                                        _trendData[idx];
-                                                    final b =
-                                                        ((item is Map
-                                                                        ? item['bucket'] ??
-                                                                              item['date'] ??
-                                                                              item['week']
-                                                                        : '')
-                                                                    as String? ??
-                                                                '')
-                                                            .split('-');
-                                                    if (b.length == 3) {
-                                                      return Text(
-                                                        '${b[1]}/${b[2]}',
-                                                        style: const TextStyle(
-                                                          fontSize: 9,
-                                                        ),
-                                                      );
-                                                    }
-                                                    if (b.length == 2) {
-                                                      return Text(
-                                                        '${b[0]}/${b[1]}',
-                                                        style: const TextStyle(
-                                                          fontSize: 9,
-                                                        ),
-                                                      );
-                                                    }
-                                                  }
-                                                  return const Text('');
-                                                },
-                                              ),
-                                            ),
-                                            leftTitles: AxisTitles(
-                                              sideTitles: SideTitles(
-                                                showTitles: true,
-                                                reservedSize: 30,
-                                                getTitlesWidget: (v, m) => Text(
-                                                  '${v.toInt()}%',
-                                                  style: const TextStyle(
-                                                    fontSize: 9,
-                                                  ),
-                                                ),
-                                              ),
-                                            ),
-                                            topTitles: const AxisTitles(
-                                              sideTitles: SideTitles(
-                                                showTitles: false,
-                                              ),
-                                            ),
-                                            rightTitles: const AxisTitles(
-                                              sideTitles: SideTitles(
-                                                showTitles: false,
-                                              ),
-                                            ),
-                                          ),
-                                          lineBarsData: [
-                                            LineChartBarData(
-                                              spots: List.generate(
-                                                _trendData.length,
-                                                (i) {
-                                                  final item = _trendData[i];
-                                                  final pctNum = (item is Map)
-                                                      ? (item['attendance_pct'] ??
-                                                            item['attendance_percentage'] ??
-                                                            item['pct'] ??
-                                                            item['attendance'])
-                                                      : null;
-                                                  final pct =
-                                                      (pctNum as num?)
-                                                          ?.toDouble() ??
-                                                      0.0;
-                                                  return FlSpot(
-                                                    i.toDouble(),
-                                                    pct,
-                                                  );
-                                                },
-                                              ),
-                                              isCurved: true,
-                                              color: Colors.green.shade600,
-                                              barWidth: 3,
-                                              dotData: const FlDotData(
-                                                show: true,
-                                              ),
-                                              belowBarData: BarAreaData(
-                                                show: true,
-                                                color: Colors.green.shade100
-                                                    .withValues(alpha: 0.4),
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                );
-              },
-            ),
-            const SizedBox(height: 24),
-
-            // Defaulters Table Section
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Row(
-                          children: [
-                            const Icon(
-                              Icons.warning_amber_rounded,
-                              color: Colors.red,
-                            ),
-                            const SizedBox(width: 8),
-                            Text(
-                              'Attendance Defaulters (< ${_threshold.toStringAsFixed(0)}%)',
-                              style: Theme.of(context).textTheme.titleMedium
-                                  ?.copyWith(fontWeight: FontWeight.bold),
-                            ),
-                          ],
-                        ),
-                        ElevatedButton.icon(
-                          icon: const Icon(Icons.download, size: 16),
-                          label: const Text('Export Defaulters CSV'),
-                          onPressed: () async {
-                            try {
-                              final (from, to) = _getDateRange();
-                              final file = await widget.api
-                                  .exportDefaultersReport(
-                                    classId: _selectedClass?.id,
-                                    from: from,
-                                    to: to,
-                                    threshold: _threshold,
-                                  );
-                              triggerDownload(
-                                file.bytes,
-                                file.fileName ?? 'defaulters.csv',
-                                'text/csv',
-                              );
-                              widget.snack(
-                                'Downloaded defaulters list',
-                                error: false,
-                              );
-                            } catch (e) {
-                              widget.snack('Failed to export defaulters: $e');
-                            }
-                          },
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    if (_defaultersData.isEmpty)
-                      const Padding(
-                        padding: EdgeInsets.all(20),
-                        child: Center(
-                          child: Text(
-                            '🎉 No defaulters found — all students have attendance at or above the threshold!',
-                            style: TextStyle(
-                              color: Colors.green,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ),
-                      )
-                    else
-                      SingleChildScrollView(
-                        scrollDirection: Axis.horizontal,
-                        child: DataTable(
-                          columns: const [
-                            DataColumn(label: Text('Roll')),
-                            DataColumn(label: Text('Student Name')),
-                            DataColumn(label: Text('Admission No')),
-                            DataColumn(label: Text('Class')),
-                            DataColumn(label: Text('Guardian Info')),
-                            DataColumn(label: Text('Present / Total')),
-                            DataColumn(label: Text('Attendance %')),
-                          ],
-                          rows: _defaultersData.map((d) {
-                            final pct =
-                                (d['attendance_pct'] as num?)?.toDouble() ??
-                                0.0;
-                            final name = d['full_name'] ?? '';
-                            final roll = d['roll_number'] ?? '';
-                            final adm = d['admission_number'] ?? '';
-                            final clsName = d['class_name'] ?? '';
-                            final gName = d['guardian_name'] ?? '';
-                            final gPhone = d['guardian_phone'] ?? '';
-                            final present = d['present_count'] ?? 0;
-                            final total = d['total_sessions'] ?? 0;
-
-                            return DataRow(
-                              cells: [
-                                DataCell(Text(roll)),
-                                DataCell(
-                                  Text(
-                                    name,
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                ),
-                                DataCell(Text(adm)),
-                                DataCell(Text(clsName)),
-                                DataCell(
-                                  Text(
-                                    gName.isNotEmpty ? '$gName ($gPhone)' : '-',
-                                  ),
-                                ),
-                                DataCell(Text('$present / $total')),
-                                DataCell(
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 8,
-                                      vertical: 4,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: pct < 50
-                                          ? Colors.red.shade100
-                                          : Colors.orange.shade100,
-                                      borderRadius: BorderRadius.circular(6),
-                                    ),
-                                    child: Text(
-                                      '${pct.toStringAsFixed(1)}%',
-                                      style: TextStyle(
-                                        color: pct < 50
-                                            ? Colors.red.shade900
-                                            : Colors.orange.shade900,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            );
-                          }).toList(),
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-            ),
-          ],
         ],
       ),
     );
@@ -5288,10 +4787,7 @@ class _SchoolDaysTabState extends State<_SchoolDaysTab> {
   }
 
   Future<void> _loadAllData() async {
-    await Future.wait([
-      _loadWeeklySchedule(),
-      _loadHolidays(),
-    ]);
+    await Future.wait([_loadWeeklySchedule(), _loadHolidays()]);
   }
 
   Future<void> _loadWeeklySchedule() async {
@@ -5299,15 +4795,29 @@ class _SchoolDaysTabState extends State<_SchoolDaysTab> {
     try {
       final res = await widget.api.getWeeklySchedule();
       if (res is List) {
-        final loaded = res.map((x) => WeeklyDaySchedule.fromJson(x as Map<String, dynamic>)).toList();
+        final loaded = res
+            .map((x) => WeeklyDaySchedule.fromJson(x as Map<String, dynamic>))
+            .toList();
         if (loaded.isNotEmpty) {
           // Merge loaded with default 7 days ensuring all 0-6 days exist
           final map = {for (var item in loaded) item.dayOfWeek: item};
           setState(() {
             _weeklySchedules = List.generate(7, (d) {
               if (map.containsKey(d)) return map[d]!;
-              final name = const ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][d];
-              return WeeklyDaySchedule(dayOfWeek: d, dayName: name, isWorkingDay: d != 0);
+              final name = const [
+                'Sunday',
+                'Monday',
+                'Tuesday',
+                'Wednesday',
+                'Thursday',
+                'Friday',
+                'Saturday',
+              ][d];
+              return WeeklyDaySchedule(
+                dayOfWeek: d,
+                dayName: name,
+                isWorkingDay: d != 0,
+              );
             });
           });
         }
@@ -5325,13 +4835,27 @@ class _SchoolDaysTabState extends State<_SchoolDaysTab> {
       final payload = _weeklySchedules.map((s) => s.toJson()).toList();
       final res = await widget.api.updateWeeklySchedule(payload);
       if (res is List) {
-        final loaded = res.map((x) => WeeklyDaySchedule.fromJson(x as Map<String, dynamic>)).toList();
+        final loaded = res
+            .map((x) => WeeklyDaySchedule.fromJson(x as Map<String, dynamic>))
+            .toList();
         final map = {for (var item in loaded) item.dayOfWeek: item};
         setState(() {
           _weeklySchedules = List.generate(7, (d) {
             if (map.containsKey(d)) return map[d]!;
-            final name = const ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][d];
-            return WeeklyDaySchedule(dayOfWeek: d, dayName: name, isWorkingDay: d != 0);
+            final name = const [
+              'Sunday',
+              'Monday',
+              'Tuesday',
+              'Wednesday',
+              'Thursday',
+              'Friday',
+              'Saturday',
+            ][d];
+            return WeeklyDaySchedule(
+              dayOfWeek: d,
+              dayName: name,
+              isWorkingDay: d != 0,
+            );
           });
         });
       }
@@ -5349,7 +4873,9 @@ class _SchoolDaysTabState extends State<_SchoolDaysTab> {
       final res = await widget.api.getSchoolHolidays();
       if (res is List) {
         setState(() {
-          _holidays = res.map((x) => SchoolHoliday.fromJson(x as Map<String, dynamic>)).toList();
+          _holidays = res
+              .map((x) => SchoolHoliday.fromJson(x as Map<String, dynamic>))
+              .toList();
         });
       }
     } catch (e) {
@@ -5359,7 +4885,10 @@ class _SchoolDaysTabState extends State<_SchoolDaysTab> {
     }
   }
 
-  Future<void> _showAddHolidayDialog({DateTime? initialDate, String? initialTitle}) async {
+  Future<void> _showAddHolidayDialog({
+    DateTime? initialDate,
+    String? initialTitle,
+  }) async {
     final titleCtrl = TextEditingController(text: initialTitle ?? '');
     final descCtrl = TextEditingController();
     DateTime selectedDate = initialDate ?? DateTime.now();
@@ -5379,7 +4908,7 @@ class _SchoolDaysTabState extends State<_SchoolDaysTab> {
               'Wednesday',
               'Thursday',
               'Friday',
-              'Saturday'
+              'Saturday',
             ][selectedDate.weekday % 7];
 
             return AlertDialog(
@@ -5414,7 +4943,8 @@ class _SchoolDaysTabState extends State<_SchoolDaysTab> {
                       controller: descCtrl,
                       decoration: const InputDecoration(
                         labelText: 'Description (Optional)',
-                        hintText: 'e.g. School closed for Diwali festival celebration',
+                        hintText:
+                            'e.g. School closed for Diwali festival celebration',
                         border: OutlineInputBorder(),
                         isDense: true,
                       ),
@@ -5434,7 +4964,10 @@ class _SchoolDaysTabState extends State<_SchoolDaysTab> {
                         }
                       },
                       child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 10,
+                        ),
                         decoration: BoxDecoration(
                           border: Border.all(color: Colors.grey.shade400),
                           borderRadius: BorderRadius.circular(8),
@@ -5445,11 +4978,25 @@ class _SchoolDaysTabState extends State<_SchoolDaysTab> {
                             Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                const Text('Selected Date', style: TextStyle(fontSize: 11, color: Colors.grey)),
-                                Text('$dateStr ($dayOfWeekName)', style: const TextStyle(fontWeight: FontWeight.bold)),
+                                const Text(
+                                  'Selected Date',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    color: Colors.grey,
+                                  ),
+                                ),
+                                Text(
+                                  '$dateStr ($dayOfWeekName)',
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
                               ],
                             ),
-                            const Icon(Icons.calendar_month, color: Colors.blue),
+                            const Icon(
+                              Icons.calendar_month,
+                              color: Colors.blue,
+                            ),
                           ],
                         ),
                       ),
@@ -5486,10 +5033,15 @@ class _SchoolDaysTabState extends State<_SchoolDaysTab> {
                       await widget.api.addSchoolHoliday(
                         holidayDate: dateStr,
                         title: titleCtrl.text.trim(),
-                        description: descCtrl.text.trim().isEmpty ? null : descCtrl.text.trim(),
+                        description: descCtrl.text.trim().isEmpty
+                            ? null
+                            : descCtrl.text.trim(),
                         isHoliday: isHoliday,
                       );
-                      widget.snack('Holiday declared successfully!', error: false);
+                      widget.snack(
+                        'Holiday declared successfully!',
+                        error: false,
+                      );
                       _loadHolidays();
                     } catch (e) {
                       widget.snack('Error creating holiday: $e');
@@ -5510,9 +5062,14 @@ class _SchoolDaysTabState extends State<_SchoolDaysTab> {
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Delete Holiday'),
-        content: Text('Are you sure you want to remove the holiday "${h.title}" for ${h.holidayDate}?'),
+        content: Text(
+          'Are you sure you want to remove the holiday "${h.title}" for ${h.holidayDate}?',
+        ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
             onPressed: () => Navigator.pop(ctx, true),
@@ -5543,7 +5100,9 @@ class _SchoolDaysTabState extends State<_SchoolDaysTab> {
           // Header banner
           Card(
             elevation: 2,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
             child: Padding(
               padding: const EdgeInsets.all(16),
               child: Row(
@@ -5551,10 +5110,16 @@ class _SchoolDaysTabState extends State<_SchoolDaysTab> {
                   Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: Theme.of(context).primaryColor.withValues(alpha: 0.1),
+                      color: Theme.of(
+                        context,
+                      ).primaryColor.withValues(alpha: 0.1),
                       shape: BoxShape.circle,
                     ),
-                    child: Icon(Icons.calendar_month, size: 32, color: Theme.of(context).primaryColor),
+                    child: Icon(
+                      Icons.calendar_month,
+                      size: 32,
+                      color: Theme.of(context).primaryColor,
+                    ),
                   ),
                   const SizedBox(width: 16),
                   Expanded(
@@ -5563,7 +5128,10 @@ class _SchoolDaysTabState extends State<_SchoolDaysTab> {
                       children: const [
                         Text(
                           'Configure School Days & Holidays',
-                          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
                         SizedBox(height: 4),
                         Text(
@@ -5582,7 +5150,9 @@ class _SchoolDaysTabState extends State<_SchoolDaysTab> {
           // ─── Section 1: Weekly Working Days ──────────────────────────────────────
           Card(
             elevation: 2,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
             child: Padding(
               padding: const EdgeInsets.all(16),
               child: Column(
@@ -5597,13 +5167,23 @@ class _SchoolDaysTabState extends State<_SchoolDaysTab> {
                           SizedBox(width: 8),
                           Text(
                             'Weekly Working Days Configuration',
-                            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
                         ],
                       ),
                       ElevatedButton.icon(
                         icon: _savingWeekly
-                            ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                            ? const SizedBox(
+                                width: 14,
+                                height: 14,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Colors.white,
+                                ),
+                              )
                             : const Icon(Icons.save, size: 18),
                         label: const Text('Save Weekly Schedule'),
                         onPressed: _savingWeekly ? null : _saveWeeklySchedule,
@@ -5617,7 +5197,12 @@ class _SchoolDaysTabState extends State<_SchoolDaysTab> {
                   ),
                   const Divider(height: 24),
                   if (_loadingWeekly)
-                    const Center(child: Padding(padding: EdgeInsets.all(24), child: CircularProgressIndicator()))
+                    const Center(
+                      child: Padding(
+                        padding: EdgeInsets.all(24),
+                        child: CircularProgressIndicator(),
+                      ),
+                    )
                   else
                     Wrap(
                       spacing: 12,
@@ -5628,7 +5213,10 @@ class _SchoolDaysTabState extends State<_SchoolDaysTab> {
 
                         return Container(
                           width: 170,
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 10,
+                          ),
                           decoration: BoxDecoration(
                             color: item.isWorkingDay
                                 ? Colors.green.withValues(alpha: 0.05)
@@ -5645,7 +5233,8 @@ class _SchoolDaysTabState extends State<_SchoolDaysTab> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
                                 children: [
                                   Text(
                                     item.dayName,
@@ -5661,7 +5250,9 @@ class _SchoolDaysTabState extends State<_SchoolDaysTab> {
                                     inactiveThumbColor: Colors.orange,
                                     onChanged: (val) {
                                       setState(() {
-                                        _weeklySchedules[index] = item.copyWith(isWorkingDay: val);
+                                        _weeklySchedules[index] = item.copyWith(
+                                          isWorkingDay: val,
+                                        );
                                       });
                                     },
                                   ),
@@ -5669,17 +5260,26 @@ class _SchoolDaysTabState extends State<_SchoolDaysTab> {
                               ),
                               const SizedBox(height: 4),
                               Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 2,
+                                ),
                                 decoration: BoxDecoration(
-                                  color: item.isWorkingDay ? Colors.green.shade100 : Colors.orange.shade100,
+                                  color: item.isWorkingDay
+                                      ? Colors.green.shade100
+                                      : Colors.orange.shade100,
                                   borderRadius: BorderRadius.circular(4),
                                 ),
                                 child: Text(
-                                  item.isWorkingDay ? 'School Day' : 'Holiday (Off)',
+                                  item.isWorkingDay
+                                      ? 'School Day'
+                                      : 'Holiday (Off)',
                                   style: TextStyle(
                                     fontSize: 11,
                                     fontWeight: FontWeight.w600,
-                                    color: item.isWorkingDay ? Colors.green.shade900 : Colors.orange.shade900,
+                                    color: item.isWorkingDay
+                                        ? Colors.green.shade900
+                                        : Colors.orange.shade900,
                                   ),
                                 ),
                               ),
@@ -5694,15 +5294,32 @@ class _SchoolDaysTabState extends State<_SchoolDaysTab> {
                     children: [
                       OutlinedButton.icon(
                         icon: const Icon(Icons.tune, size: 16),
-                        label: const Text('Preset: Mon–Sat School Days, Sunday Holiday'),
+                        label: const Text(
+                          'Preset: Mon–Sat School Days, Sunday Holiday',
+                        ),
                         onPressed: () {
                           setState(() {
                             _weeklySchedules = List.generate(7, (d) {
-                              final name = const ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][d];
-                              return WeeklyDaySchedule(dayOfWeek: d, dayName: name, isWorkingDay: d != 0);
+                              final name = const [
+                                'Sunday',
+                                'Monday',
+                                'Tuesday',
+                                'Wednesday',
+                                'Thursday',
+                                'Friday',
+                                'Saturday',
+                              ][d];
+                              return WeeklyDaySchedule(
+                                dayOfWeek: d,
+                                dayName: name,
+                                isWorkingDay: d != 0,
+                              );
                             });
                           });
-                          widget.snack('Preset applied! Click "Save Weekly Schedule" to persist.', error: false);
+                          widget.snack(
+                            'Preset applied! Click "Save Weekly Schedule" to persist.',
+                            error: false,
+                          );
                         },
                       ),
                     ],
@@ -5716,7 +5333,9 @@ class _SchoolDaysTabState extends State<_SchoolDaysTab> {
           // ─── Section 2: Specific Date Holidays & Exception Days ─────────────────
           Card(
             elevation: 2,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
             child: Padding(
               padding: const EdgeInsets.all(16),
               child: Column(
@@ -5731,7 +5350,10 @@ class _SchoolDaysTabState extends State<_SchoolDaysTab> {
                           SizedBox(width: 8),
                           Text(
                             'Specific Date Holidays & Overrides',
-                            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
                         ],
                       ),
@@ -5739,17 +5361,25 @@ class _SchoolDaysTabState extends State<_SchoolDaysTab> {
                         spacing: 8,
                         children: [
                           OutlinedButton.icon(
-                            icon: const Icon(Icons.star, size: 16, color: Colors.orange),
+                            icon: const Icon(
+                              Icons.star,
+                              size: 16,
+                              color: Colors.orange,
+                            ),
                             label: const Text('Add Diwali Holiday Example'),
                             onPressed: () {
                               // Find upcoming Monday or today
                               final now = DateTime.now();
-                              int daysUntilMon = (DateTime.monday - now.weekday + 7) % 7;
+                              int daysUntilMon =
+                                  (DateTime.monday - now.weekday + 7) % 7;
                               if (daysUntilMon == 0) daysUntilMon = 7;
-                              final nextMon = now.add(Duration(days: daysUntilMon));
+                              final nextMon = now.add(
+                                Duration(days: daysUntilMon),
+                              );
                               _showAddHolidayDialog(
                                 initialDate: nextMon,
-                                initialTitle: 'Diwali - Public Holiday in Maharashtra',
+                                initialTitle:
+                                    'Diwali - Public Holiday in Maharashtra',
                               );
                             },
                           ),
@@ -5770,7 +5400,12 @@ class _SchoolDaysTabState extends State<_SchoolDaysTab> {
                   const Divider(height: 24),
 
                   if (_loadingHolidays)
-                    const Center(child: Padding(padding: EdgeInsets.all(24), child: CircularProgressIndicator()))
+                    const Center(
+                      child: Padding(
+                        padding: EdgeInsets.all(24),
+                        child: CircularProgressIndicator(),
+                      ),
+                    )
                   else if (_holidays.isEmpty)
                     Container(
                       padding: const EdgeInsets.all(32),
@@ -5781,11 +5416,18 @@ class _SchoolDaysTabState extends State<_SchoolDaysTab> {
                       ),
                       child: Column(
                         children: const [
-                          Icon(Icons.event_available, size: 48, color: Colors.grey),
+                          Icon(
+                            Icons.event_available,
+                            size: 48,
+                            color: Colors.grey,
+                          ),
                           SizedBox(height: 12),
                           Text(
                             'No specific date holidays configured yet.',
-                            style: TextStyle(fontWeight: FontWeight.w600, color: Colors.grey),
+                            style: TextStyle(
+                              fontWeight: FontWeight.w600,
+                              color: Colors.grey,
+                            ),
                           ),
                           SizedBox(height: 4),
                           Text(
@@ -5806,15 +5448,28 @@ class _SchoolDaysTabState extends State<_SchoolDaysTab> {
                         final dt = DateTime.tryParse(h.holidayDate);
                         String dayName = '';
                         if (dt != null) {
-                          dayName = const ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][dt.weekday % 7];
+                          dayName = const [
+                            'Sunday',
+                            'Monday',
+                            'Tuesday',
+                            'Wednesday',
+                            'Thursday',
+                            'Friday',
+                            'Saturday',
+                          ][dt.weekday % 7];
                         }
 
                         return ListTile(
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 4,
+                          ),
                           leading: Container(
                             padding: const EdgeInsets.all(10),
                             decoration: BoxDecoration(
-                              color: h.isHoliday ? Colors.orange.withValues(alpha: 0.1) : Colors.blue.withValues(alpha: 0.1),
+                              color: h.isHoliday
+                                  ? Colors.orange.withValues(alpha: 0.1)
+                                  : Colors.blue.withValues(alpha: 0.1),
                               borderRadius: BorderRadius.circular(8),
                             ),
                             child: Icon(
@@ -5835,9 +5490,14 @@ class _SchoolDaysTabState extends State<_SchoolDaysTab> {
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 10,
+                                  vertical: 4,
+                                ),
                                 decoration: BoxDecoration(
-                                  color: h.isHoliday ? Colors.orange.shade100 : Colors.blue.shade100,
+                                  color: h.isHoliday
+                                      ? Colors.orange.shade100
+                                      : Colors.blue.shade100,
                                   borderRadius: BorderRadius.circular(12),
                                 ),
                                 child: Text(
@@ -5845,13 +5505,18 @@ class _SchoolDaysTabState extends State<_SchoolDaysTab> {
                                   style: TextStyle(
                                     fontSize: 12,
                                     fontWeight: FontWeight.w600,
-                                    color: h.isHoliday ? Colors.orange.shade900 : Colors.blue.shade900,
+                                    color: h.isHoliday
+                                        ? Colors.orange.shade900
+                                        : Colors.blue.shade900,
                                   ),
                                 ),
                               ),
                               const SizedBox(width: 8),
                               IconButton(
-                                icon: const Icon(Icons.delete_outline, color: Colors.redAccent),
+                                icon: const Icon(
+                                  Icons.delete_outline,
+                                  color: Colors.redAccent,
+                                ),
                                 tooltip: 'Remove Holiday',
                                 onPressed: () => _deleteHoliday(h),
                               ),
@@ -5869,4 +5534,3 @@ class _SchoolDaysTabState extends State<_SchoolDaysTab> {
     );
   }
 }
-

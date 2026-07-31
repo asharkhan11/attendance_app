@@ -8,6 +8,18 @@ import '../widgets/searchable_dropdown.dart';
 import '../widgets/profile_modal.dart';
 import 'mark_attendance_screen.dart';
 
+import '../design_system/app_breakpoints.dart';
+import '../design_system/app_spacing.dart';
+import '../design_system/attendance_theme.dart';
+import '../features/teacher/domain/entities/student_monthly_row.dart';
+import '../features/teacher/presentation/widgets/defaulter_card.dart';
+import '../features/teacher/presentation/widgets/monthly_grid_student_card.dart';
+import '../features/teacher/presentation/widgets/teacher_dashboard_skeleton.dart';
+import '../shared/domain/entities/defaulter_entry.dart';
+import '../shared/domain/entities/kpi_metric.dart';
+import '../shared/widgets/kpi_card.dart';
+import '../shared/widgets/responsive_kpi_grid.dart';
+
 class TeacherDashboard extends StatefulWidget {
   const TeacherDashboard({super.key});
 
@@ -526,98 +538,175 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
   @override
   Widget build(BuildContext context) {
     final user = Provider.of<AuthProvider>(context).currentUser;
-    final isWide = MediaQuery.of(context).size.width > 768;
+    final isWide = !context.isMobile;
+    final attendanceTheme = Theme.of(context).extension<AttendanceTheme>();
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Teacher Portal & Attendance Workstation'),
-        elevation: 1,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.person_outline),
-            onPressed: () => ProfileModal.show(context, onProfileUpdated: _loadTeacherData),
-            tooltip: 'My Profile & Security',
-          ),
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: _loadTeacherData,
-            tooltip: 'Refresh Dashboard',
-          ),
-          IconButton(
-            icon: const Icon(Icons.logout),
-            onPressed: () => Provider.of<AuthProvider>(context, listen: false).logout(),
-            tooltip: 'Logout',
-          ),
-        ],
-      ),
       body: _isLoadingClasses
-          ? const Center(child: CircularProgressIndicator())
-          : SingleChildScrollView(
-              padding: const EdgeInsets.all(20.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  // Profile & Welcome Header
-                  _buildTeacherHeaderCard(user, isWide),
+          ? const SafeArea(child: TeacherDashboardSkeleton())
+          : SafeArea(
+              child: CustomScrollView(
+                slivers: [
+                  SliverAppBar(
+                    floating: true,
+                    pinned: true,
+                    title: const Text('Teacher Portal & Attendance Workstation'),
+                    elevation: 1,
+                    actions: [
+                      IconButton(
+                        icon: const Icon(Icons.person_outline),
+                        onPressed: () => ProfileModal.show(context, onProfileUpdated: _loadTeacherData),
+                        tooltip: 'My Profile & Security',
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.refresh),
+                        onPressed: _loadTeacherData,
+                        tooltip: 'Refresh Dashboard',
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.logout),
+                        onPressed: () => Provider.of<AuthProvider>(context, listen: false).logout(),
+                        tooltip: 'Logout',
+                      ),
+                    ],
+                  ),
+                  SliverPadding(
+                    padding: const EdgeInsets.all(AppSpacing.md),
+                    sliver: SliverList(
+                      delegate: SliverChildListDelegate([
+                        // Profile & Welcome Header
+                        _buildTeacherHeaderCard(user, isWide),
+                        const SizedBox(height: AppSpacing.md),
 
-                  const SizedBox(height: 20),
+                        // Diagnostics error alert banner
+                        if (_sessionDiagnosticError != null) _buildDiagnosticErrorCard(),
 
-                  // Diagnostics error alert banner (if 500 or session creation fails)
-                  if (_sessionDiagnosticError != null) _buildDiagnosticErrorCard(),
-
-                  // Global error message
-                  if (_errorMsg != null) ...[
-                    Card(
-                      color: Colors.orange.shade50,
-                      child: Padding(
-                        padding: const EdgeInsets.all(16.0),
-                        child: Row(
-                          children: [
-                            Icon(Icons.warning_amber_rounded, color: Colors.orange.shade800),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Text(
-                                _errorMsg!,
-                                style: TextStyle(color: Colors.orange.shade900, fontWeight: FontWeight.w600),
+                        // Global error message
+                        if (_errorMsg != null) ...[
+                          Card(
+                            color: Colors.orange.shade50,
+                            child: Padding(
+                              padding: const EdgeInsets.all(AppSpacing.md),
+                              child: Row(
+                                children: [
+                                  Icon(Icons.warning_amber_rounded, color: Colors.orange.shade800),
+                                  const SizedBox(width: AppSpacing.sm),
+                                  Expanded(
+                                    child: Text(
+                                      _errorMsg!,
+                                      style: TextStyle(color: Colors.orange.shade900, fontWeight: FontWeight.w600),
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
-                          ],
+                          ),
+                          const SizedBox(height: AppSpacing.md),
+                        ],
+
+                        // Controls: Class Switcher & Date Picker
+                        _buildControlToolbar(isWide),
+                        const SizedBox(height: AppSpacing.lg),
+
+                        // Daily Attendance Session Card
+                        _buildDailyAttendanceCard(isWide),
+                        const SizedBox(height: AppSpacing.lg),
+                      ]),
+                    ),
+                  ),
+
+                  // Analytics & KPI Deck
+                  if (_loadingAnalytics)
+                    const SliverToBoxAdapter(
+                      child: Padding(
+                        padding: EdgeInsets.all(AppSpacing.lg),
+                        child: TeacherDashboardSkeleton(),
+                      ),
+                    )
+                  else ...[
+                    if (_summary != null)
+                      SliverPadding(
+                        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+                        sliver: ResponsiveKpiGrid<KpiMetric>(
+                          items: _buildKpiMetricList(attendanceTheme),
+                          itemBuilder: (ctx, metric) => KpiCard(metric: metric),
                         ),
                       ),
+
+                    SliverPadding(
+                      padding: const EdgeInsets.all(AppSpacing.md),
+                      sliver: SliverList(
+                        delegate: SliverChildListDelegate([
+                          const SizedBox(height: AppSpacing.md),
+
+                          // Interactive Monthly Attendance Register
+                          if (_monthlyGridData != null) _buildMonthlyRegisterGridSection(context),
+
+                          const SizedBox(height: AppSpacing.lg),
+
+                          // Defaulters Alert Deck
+                          if (_defaulters.isNotEmpty) _buildDefaultersSection(context),
+                        ]),
+                      ),
                     ),
-                    const SizedBox(height: 20),
-                  ],
-
-                  // Controls: Class Switcher & Date Picker
-                  _buildControlToolbar(isWide),
-
-                  const SizedBox(height: 24),
-
-                  // Daily Attendance Session Card
-                  _buildDailyAttendanceCard(isWide),
-
-                  const SizedBox(height: 24),
-
-                  // Analytics deck & KPI Summary
-                  if (_loadingAnalytics)
-                    const Center(child: Padding(padding: EdgeInsets.all(32), child: CircularProgressIndicator()))
-                  else ...[
-                    if (_summary != null) _buildKPICards(isWide),
-
-                    const SizedBox(height: 24),
-
-                    // Interactive Monthly Attendance Register
-                    if (_monthlyGridData != null) _buildMonthlyRegisterGrid(),
-
-                    const SizedBox(height: 24),
-
-                    // Defaulters Alert Deck
-                    if (_defaulters.isNotEmpty) _buildDefaultersSection(),
                   ],
                 ],
               ),
             ),
     );
+  }
+
+  List<KpiMetric> _buildKpiMetricList(AttendanceTheme? theme) {
+    final s = _summary!;
+    final totalStr = _rosterStudents.isEmpty ? 1 : _rosterStudents.length;
+    final presentPct = _todayPresent != null ? ((_todayPresent! / totalStr) * 100).toStringAsFixed(0) : '0';
+
+    return [
+      KpiMetric(
+        title: 'Attendance Rate',
+        value: '${s.attendancePercentage.toStringAsFixed(1)}%',
+        subtitle: 'Monthly Avg',
+        icon: Icons.show_chart,
+        color: s.attendancePercentage >= 85
+            ? (theme?.present ?? Colors.green.shade700)
+            : (s.attendancePercentage >= 75 ? (theme?.late ?? Colors.orange.shade800) : (theme?.absent ?? Colors.red.shade700)),
+      ),
+      KpiMetric(
+        title: 'Enrolled Students',
+        value: '${_rosterStudents.length}',
+        subtitle: 'Class Strength',
+        icon: Icons.groups,
+        color: Colors.blue.shade700,
+      ),
+      KpiMetric(
+        title: 'Present Today',
+        value: _todayPresent != null ? '$_todayPresent' : '--',
+        subtitle: _todayPresent != null ? '$presentPct% present' : 'Not marked',
+        icon: Icons.check_circle_outline,
+        color: _todayPresent != null ? (theme?.present ?? Colors.green.shade700) : Colors.grey.shade600,
+      ),
+      KpiMetric(
+        title: 'Absent Today',
+        value: _todayAbsent != null ? '$_todayAbsent' : '--',
+        subtitle: _todayAbsent != null ? '$_todayAbsent student${_todayAbsent == 1 ? '' : 's'}' : 'Not marked',
+        icon: Icons.cancel_outlined,
+        color: _todayAbsent != null && _todayAbsent! > 0 ? (theme?.absent ?? Colors.red.shade700) : Colors.grey.shade600,
+      ),
+      KpiMetric(
+        title: 'Late / Excused',
+        value: _todayLateExcused != null ? '$_todayLateExcused' : '--',
+        subtitle: _todayLateExcused != null ? 'Special status' : 'Not marked',
+        icon: Icons.access_time_outlined,
+        color: _todayLateExcused != null && _todayLateExcused! > 0 ? (theme?.late ?? Colors.orange.shade800) : Colors.grey.shade600,
+      ),
+      KpiMetric(
+        title: 'Defaulters (<75%)',
+        value: '${_defaulters.length}',
+        subtitle: _defaulters.isNotEmpty ? 'Action Needed' : 'All Clear',
+        icon: Icons.warning_amber_rounded,
+        color: _defaulters.isNotEmpty ? (theme?.absent ?? Colors.red.shade700) : (theme?.present ?? Colors.green.shade700),
+      ),
+    ];
   }
 
   Future<void> _reopenSession(String sessionId) async {
@@ -1027,161 +1116,9 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
     );
   }
 
-  Widget _buildKPICards(bool isWide) {
-    final s = _summary!;
-    final dateStr = "${_selectedDate.year}-${_selectedDate.month.toString().padLeft(2, '0')}-${_selectedDate.day.toString().padLeft(2, '0')}";
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(
-              'Class Attendance Overview & Daily Snapshot',
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
-            ),
-            Text(
-              dateStr,
-              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.grey.shade700),
-            ),
-          ],
-        ),
-        const SizedBox(height: 12),
-        LayoutBuilder(
-          builder: (ctx, constraints) {
-            final availableWidth = constraints.maxWidth;
-            int crossAxisCount = 6;
-            if (availableWidth < 550) {
-              crossAxisCount = 2;
-            } else if (availableWidth < 900) {
-              crossAxisCount = 3;
-            }
-            final cardWidth = (availableWidth - (crossAxisCount - 1) * 12) / crossAxisCount;
 
-            final totalStr = _rosterStudents.isEmpty ? 1 : _rosterStudents.length;
-            final presentPct = _todayPresent != null ? ((_todayPresent! / totalStr) * 100).toStringAsFixed(0) : '0';
-
-            return Wrap(
-              spacing: 12,
-              runSpacing: 12,
-              children: [
-                _responsiveKpiCard(
-                  'Attendance Rate',
-                  '${s.attendancePercentage.toStringAsFixed(1)}%',
-                  'Monthly Avg',
-                  Icons.show_chart,
-                  s.attendancePercentage >= 85
-                      ? Colors.green.shade700
-                      : (s.attendancePercentage >= 75 ? Colors.orange.shade800 : Colors.red.shade700),
-                  cardWidth,
-                ),
-                _responsiveKpiCard(
-                  'Enrolled Students',
-                  '${_rosterStudents.length}',
-                  'Class Strength',
-                  Icons.groups,
-                  Colors.blue.shade700,
-                  cardWidth,
-                ),
-                _responsiveKpiCard(
-                  'Present Today',
-                  _todayPresent != null ? '$_todayPresent' : '--',
-                  _todayPresent != null ? '$presentPct% present' : 'Not marked',
-                  Icons.check_circle_outline,
-                  _todayPresent != null ? Colors.green.shade700 : Colors.grey.shade600,
-                  cardWidth,
-                ),
-                _responsiveKpiCard(
-                  'Absent Today',
-                  _todayAbsent != null ? '$_todayAbsent' : '--',
-                  _todayAbsent != null ? '$_todayAbsent student${_todayAbsent == 1 ? '' : 's'}' : 'Not marked',
-                  Icons.cancel_outlined,
-                  _todayAbsent != null && _todayAbsent! > 0 ? Colors.red.shade700 : Colors.grey.shade600,
-                  cardWidth,
-                ),
-                _responsiveKpiCard(
-                  'Late / Excused',
-                  _todayLateExcused != null ? '$_todayLateExcused' : '--',
-                  _todayLateExcused != null ? 'Special status' : 'Not marked',
-                  Icons.access_time_outlined,
-                  _todayLateExcused != null && _todayLateExcused! > 0 ? Colors.orange.shade800 : Colors.grey.shade600,
-                  cardWidth,
-                ),
-                _responsiveKpiCard(
-                  'Defaulters (<75%)',
-                  '${_defaulters.length}',
-                  _defaulters.isNotEmpty ? 'Action Needed' : 'All Clear',
-                  Icons.warning_amber_rounded,
-                  _defaulters.isNotEmpty ? Colors.red.shade700 : Colors.green.shade700,
-                  cardWidth,
-                ),
-              ],
-            );
-          },
-        ),
-      ],
-    );
-  }
-
-  Widget _responsiveKpiCard(
-    String title,
-    String value,
-    String badgeText,
-    IconData icon,
-    Color color,
-    double width,
-  ) {
-    return SizedBox(
-      width: width,
-      child: Card(
-        elevation: 2,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        child: Container(
-          padding: const EdgeInsets.all(12.0),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: color.withValues(alpha: 0.2), width: 1),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Expanded(
-                    child: Text(
-                      title,
-                      style: TextStyle(color: Colors.grey.shade700, fontSize: 11, fontWeight: FontWeight.w600),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                  Icon(icon, color: color, size: 16),
-                ],
-              ),
-              const SizedBox(height: 8),
-              FittedBox(
-                fit: BoxFit.scaleDown,
-                alignment: Alignment.centerLeft,
-                child: Text(
-                  value,
-                  style: TextStyle(color: color, fontSize: 22, fontWeight: FontWeight.bold),
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                badgeText,
-                style: TextStyle(color: Colors.grey.shade600, fontSize: 10, fontWeight: FontWeight.w500),
-                overflow: TextOverflow.ellipsis,
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildMonthlyRegisterGrid() {
+  Widget _buildMonthlyRegisterGridSection(BuildContext context) {
     if (_monthlyGridData is! Map) return const SizedBox();
     final data = _monthlyGridData as Map;
     final students = (data['students'] as List?) ?? [];
@@ -1191,12 +1128,13 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
       'July', 'August', 'September', 'October', 'November', 'December'
     ];
     final monthName = monthNames[(_selectedDate.month - 1).clamp(0, 11)];
+    final isMobile = context.isMobile;
 
     return Card(
       elevation: 2,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: Padding(
-        padding: const EdgeInsets.all(16.0),
+        padding: const EdgeInsets.all(AppSpacing.md),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -1206,9 +1144,9 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
                 Row(
                   children: [
                     const Icon(Icons.grid_on, color: Colors.blue, size: 20),
-                    const SizedBox(width: 8),
+                    const SizedBox(width: AppSpacing.sm),
                     Text(
-                      'Monthly Attendance Grid Register',
+                      'Monthly Attendance Register',
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
                     ),
                   ],
@@ -1227,138 +1165,189 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
                 ),
               ],
             ),
-            const SizedBox(height: 10),
+            const SizedBox(height: AppSpacing.sm),
             // Legend Bar
             Row(
               children: [
                 _gridLegendItem('P', 'Present', Colors.green),
-                const SizedBox(width: 12),
+                const SizedBox(width: AppSpacing.sm),
                 _gridLegendItem('A', 'Absent', Colors.red),
-                const SizedBox(width: 12),
+                const SizedBox(width: AppSpacing.sm),
                 _gridLegendItem('L', 'Late', Colors.orange),
-                const SizedBox(width: 12),
+                const SizedBox(width: AppSpacing.sm),
                 _gridLegendItem('E', 'Excused', Colors.blue),
-                const SizedBox(width: 12),
+                const SizedBox(width: AppSpacing.sm),
                 _gridLegendItem('-', 'No Session', Colors.grey),
               ],
             ),
-            const SizedBox(height: 12),
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: DataTable(
-                columnSpacing: 8,
-                headingRowHeight: 36,
-                dataRowMinHeight: 36,
-                dataRowMaxHeight: 36,
-                columns: [
-                  const DataColumn(label: Text('Roll', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold))),
-                  const DataColumn(label: Text('Student Name', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold))),
-                  ...List.generate(daysInMonth, (i) => DataColumn(
-                    label: Container(
-                      alignment: Alignment.center,
-                      width: 20,
-                      child: Text('${i + 1}', style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
-                    ),
-                  )),
-                  const DataColumn(label: Text('Tot P', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.green))),
-                  const DataColumn(label: Text('Tot A', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.red))),
-                ],
-                rows: students.map<DataRow>((st) {
+            const SizedBox(height: AppSpacing.md),
+
+            // Responsive view branching: Mobile Cards vs Desktop DataTable
+            if (isMobile)
+              ListView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                itemCount: students.length,
+                itemBuilder: (ctx, i) {
+                  final st = students[i];
                   final roll = (st['roll_number'] ?? '').toString();
                   final name = (st['full_name'] ?? '').toString();
-                  final dailyMap = (st['daily_status'] as Map?) ?? (st['daily'] as Map?) ?? {};
-                  final totP = st['total_present'] ?? 0;
-                  final totA = st['total_absent'] ?? 0;
+                  final stId = (st['student_id'] ?? st['id'] ?? '').toString();
+                  final dailyMap = Map<String, String>.from((st['daily_status'] as Map?) ?? (st['daily'] as Map?) ?? {});
 
-                  return DataRow(
-                    cells: [
-                      DataCell(Text(roll, style: const TextStyle(fontSize: 10))),
-                      DataCell(
-                        InkWell(
-                          onTap: () {
-                            final stId = st['student_id'] ?? st['id'];
-                            final studentMatch = _rosterStudents.where((s) => s.id == stId || s.rollNumber == roll).firstOrNull ??
-                                Student(
-                                  id: (stId ?? '').toString(),
-                                  schoolId: '',
-                                  classId: _selectedClass?.id ?? '',
-                                  admissionNumber: (st['admission_number'] ?? 'N/A').toString(),
-                                  rollNumber: roll,
-                                  fullName: name,
-                                  gender: 'other',
-                                  isActive: true,
-                                  createdAt: DateTime.now().toIso8601String(),
-                                );
-                            _showStudentProfileModal(
-                              studentMatch,
-                              gridStudentData: st is Map<String, dynamic>
-                                  ? st
-                                  : Map<String, dynamic>.from(st as Map),
-                            );
-                          },
-                          borderRadius: BorderRadius.circular(4),
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 2),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Text(
-                                  name,
-                                  style: TextStyle(
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.bold,
-                                    color: Theme.of(context).primaryColor,
+                  final monthlyRow = StudentMonthlyRow(
+                    studentId: stId,
+                    fullName: name,
+                    rollNumber: roll,
+                    admissionNumber: (st['admission_number'] ?? 'N/A').toString(),
+                    dailyStatus: dailyMap,
+                    totalPresent: (st['total_present'] as num?)?.toInt() ?? 0,
+                    totalAbsent: (st['total_absent'] as num?)?.toInt() ?? 0,
+                    totalLate: (st['total_late'] as num?)?.toInt() ?? 0,
+                    totalExcused: (st['total_excused'] as num?)?.toInt() ?? 0,
+                  );
+
+                  final studentMatch = _rosterStudents.where((s) => s.id == stId || s.rollNumber == roll).firstOrNull ??
+                      Student(
+                        id: stId,
+                        schoolId: '',
+                        classId: _selectedClass?.id ?? '',
+                        admissionNumber: (st['admission_number'] ?? 'N/A').toString(),
+                        rollNumber: roll,
+                        fullName: name,
+                        gender: 'other',
+                        isActive: true,
+                        createdAt: DateTime.now().toIso8601String(),
+                      );
+
+                  return MonthlyGridStudentCard(
+                    student: monthlyRow,
+                    daysInMonth: daysInMonth,
+                    selectedDate: _selectedDate,
+                    onTap: () => _showStudentProfileModal(
+                      studentMatch,
+                      gridStudentData: st is Map<String, dynamic> ? st : Map<String, dynamic>.from(st as Map),
+                    ),
+                  );
+                },
+              )
+            else
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: DataTable(
+                  columnSpacing: 8,
+                  headingRowHeight: 36,
+                  dataRowMinHeight: 36,
+                  dataRowMaxHeight: 36,
+                  columns: [
+                    const DataColumn(label: Text('Roll', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold))),
+                    const DataColumn(label: Text('Student Name', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold))),
+                    ...List.generate(daysInMonth, (i) => DataColumn(
+                      label: Container(
+                        alignment: Alignment.center,
+                        width: 20,
+                        child: Text('${i + 1}', style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
+                      ),
+                    )),
+                    const DataColumn(label: Text('Tot P', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.green))),
+                    const DataColumn(label: Text('Tot A', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.red))),
+                  ],
+                  rows: students.map<DataRow>((st) {
+                    final roll = (st['roll_number'] ?? '').toString();
+                    final name = (st['full_name'] ?? '').toString();
+                    final dailyMap = (st['daily_status'] as Map?) ?? (st['daily'] as Map?) ?? {};
+                    final totP = st['total_present'] ?? 0;
+                    final totA = st['total_absent'] ?? 0;
+
+                    return DataRow(
+                      cells: [
+                        DataCell(Text(roll, style: const TextStyle(fontSize: 10))),
+                        DataCell(
+                          InkWell(
+                            onTap: () {
+                              final stId = st['student_id'] ?? st['id'];
+                              final studentMatch = _rosterStudents.where((s) => s.id == stId || s.rollNumber == roll).firstOrNull ??
+                                  Student(
+                                    id: (stId ?? '').toString(),
+                                    schoolId: '',
+                                    classId: _selectedClass?.id ?? '',
+                                    admissionNumber: (st['admission_number'] ?? 'N/A').toString(),
+                                    rollNumber: roll,
+                                    fullName: name,
+                                    gender: 'other',
+                                    isActive: true,
+                                    createdAt: DateTime.now().toIso8601String(),
+                                  );
+                              _showStudentProfileModal(
+                                studentMatch,
+                                gridStudentData: st is Map<String, dynamic>
+                                    ? st
+                                    : Map<String, dynamic>.from(st as Map),
+                              );
+                            },
+                            borderRadius: BorderRadius.circular(4),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 2),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(
+                                    name,
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.bold,
+                                      color: Theme.of(context).primaryColor,
+                                    ),
                                   ),
-                                ),
-                                const SizedBox(width: 4),
-                                Icon(Icons.info_outline, size: 13, color: Theme.of(context).primaryColor),
-                              ],
+                                  const SizedBox(width: 4),
+                                  Icon(Icons.info_outline, size: 13, color: Theme.of(context).primaryColor),
+                                ],
+                              ),
                             ),
                           ),
                         ),
-                      ),
-                      ...List.generate(daysInMonth, (i) {
-                        final dayNum = i + 1;
-                        final dStr = "${_selectedDate.year}-${_selectedDate.month.toString().padLeft(2, '0')}-${dayNum.toString().padLeft(2, '0')}";
-                        final code = (dailyMap[dStr] ?? dailyMap[dayNum.toString()] ?? '-').toString();
+                        ...List.generate(daysInMonth, (i) {
+                          final dayNum = i + 1;
+                          final dStr = "${_selectedDate.year}-${_selectedDate.month.toString().padLeft(2, '0')}-${dayNum.toString().padLeft(2, '0')}";
+                          final code = (dailyMap[dStr] ?? dailyMap[dayNum.toString()] ?? '-').toString();
 
-                        Color badgeBg = Colors.grey.shade100;
-                        Color textColor = Colors.grey.shade600;
+                          Color badgeBg = Colors.grey.shade100;
+                          Color textColor = Colors.grey.shade600;
 
-                        if (code == 'P') {
-                          badgeBg = Colors.green.shade100;
-                          textColor = Colors.green.shade900;
-                        } else if (code == 'A') {
-                          badgeBg = Colors.red.shade100;
-                          textColor = Colors.red.shade900;
-                        } else if (code == 'L') {
-                          badgeBg = Colors.orange.shade100;
-                          textColor = Colors.orange.shade900;
-                        } else if (code == 'E') {
-                          badgeBg = Colors.blue.shade100;
-                          textColor = Colors.blue.shade900;
-                        }
+                          if (code == 'P') {
+                            badgeBg = Colors.green.shade100;
+                            textColor = Colors.green.shade900;
+                          } else if (code == 'A') {
+                            badgeBg = Colors.red.shade100;
+                            textColor = Colors.red.shade900;
+                          } else if (code == 'L') {
+                            badgeBg = Colors.orange.shade100;
+                            textColor = Colors.orange.shade900;
+                          } else if (code == 'E') {
+                            badgeBg = Colors.blue.shade100;
+                            textColor = Colors.blue.shade900;
+                          }
 
-                        return DataCell(
-                          Container(
-                            alignment: Alignment.center,
-                            width: 20,
-                            height: 20,
-                            decoration: BoxDecoration(color: badgeBg, borderRadius: BorderRadius.circular(4)),
-                            child: Text(
-                              code,
-                              style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: textColor),
+                          return DataCell(
+                            Container(
+                              alignment: Alignment.center,
+                              width: 20,
+                              height: 20,
+                              decoration: BoxDecoration(color: badgeBg, borderRadius: BorderRadius.circular(4)),
+                              child: Text(
+                                code,
+                                style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: textColor),
+                              ),
                             ),
-                          ),
-                        );
-                      }),
-                      DataCell(Text('$totP', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.green.shade800))),
-                      DataCell(Text('$totA', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.red.shade800))),
-                    ],
-                  );
-                }).toList(),
+                          );
+                        }),
+                        DataCell(Text('$totP', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.green.shade800))),
+                        DataCell(Text('$totA', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.red.shade800))),
+                      ],
+                    );
+                  }).toList(),
+                ),
               ),
-            ),
           ],
         ),
       ),
@@ -1382,61 +1371,46 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
     );
   }
 
-  Widget _buildDefaultersSection() {
+  Widget _buildDefaultersSection(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(
           children: [
             const Icon(Icons.warning_amber_rounded, color: Colors.red),
-            const SizedBox(width: 8),
+            const SizedBox(width: AppSpacing.sm),
             Text(
               'Attendance Defaulters (< 75%)',
               style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold, color: Colors.red),
             ),
           ],
         ),
-        const SizedBox(height: 8),
-        Card(
-          child: ListView.separated(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            itemCount: _defaulters.length,
-            separatorBuilder: (_, _) => const Divider(height: 1),
-            itemBuilder: (ctx, i) {
-              final d = _defaulters[i];
-              final studentMatch = _rosterStudents.where((s) => s.id == d.studentId).firstOrNull;
+        const SizedBox(height: AppSpacing.sm),
+        ListView.separated(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          itemCount: _defaulters.length,
+          separatorBuilder: (_, _) => const SizedBox(height: AppSpacing.xs),
+          itemBuilder: (ctx, i) {
+            final d = _defaulters[i];
+            final studentMatch = _rosterStudents.where((s) => s.id == d.studentId).firstOrNull;
 
-              return ListTile(
-                leading: CircleAvatar(
-                  backgroundColor: Colors.red.shade100,
-                  child: Text(d.rollNumber, style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.red.shade900)),
-                ),
-                title: Text(d.fullName, style: const TextStyle(fontWeight: FontWeight.bold)),
-                subtitle: Text('Attended: ${d.present} / ${d.totalSessions} sessions'),
-                trailing: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      '${d.attendancePercentage.toStringAsFixed(1)}%',
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        color: d.attendancePercentage < 50 ? Colors.red : Colors.orange.shade900,
-                        fontSize: 16,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    if (studentMatch != null)
-                      IconButton(
-                        icon: const Icon(Icons.info_outline, color: Colors.blue),
-                        onPressed: () => _showStudentProfileModal(studentMatch),
-                        tooltip: 'View Profile',
-                      ),
-                  ],
-                ),
-              );
-            },
-          ),
+            final defaulterEntry = DefaulterEntry(
+              studentId: d.studentId,
+              fullName: d.fullName,
+              rollNumber: d.rollNumber,
+              admissionNumber: studentMatch?.admissionNumber ?? 'N/A',
+              className: _selectedClass?.displayName ?? '',
+              presentCount: d.present,
+              totalSessions: d.totalSessions,
+              attendancePercentage: d.attendancePercentage,
+            );
+
+            return DefaulterCard(
+              defaulter: defaulterEntry,
+              onTapProfile: studentMatch != null ? () => _showStudentProfileModal(studentMatch) : null,
+            );
+          },
         ),
       ],
     );
