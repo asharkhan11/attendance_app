@@ -12,8 +12,8 @@ class ResponsiveKpiGrid<T> extends StatelessWidget {
     super.key,
     required this.items,
     required this.itemBuilder,
-    this.mobileAspectRatio = 1.3,
-    this.desktopAspectRatio = 1.6,
+    this.mobileAspectRatio = 2.0,
+    this.desktopAspectRatio = 2.4,
   });
 
   @override

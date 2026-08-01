@@ -102,16 +102,22 @@ class RosterItem extends StatelessWidget {
                         vertical: 6.0,
                       ),
                       decoration: BoxDecoration(
-                        color: isSelected ? color : color.withValues(alpha: 0.08),
+                        color: isSelected ? color : Colors.grey.shade100,
                         borderRadius: BorderRadius.circular(AppRadius.sm),
-                        border: Border.all(color: isSelected ? color : color.withValues(alpha: 0.3)),
+                        border: Border.all(
+                          color: isSelected ? color : Colors.grey.shade300,
+                        ),
                       ),
                       child: Text(
-                        isMobile ? st[0].toUpperCase() : st[0].toUpperCase() + st.substring(1),
+                        isMobile
+                            ? st[0].toUpperCase()
+                            : st[0].toUpperCase() + st.substring(1),
                         style: TextStyle(
                           fontSize: 11,
-                          fontWeight: FontWeight.bold,
-                          color: isSelected ? Colors.white : color,
+                          fontWeight: isSelected
+                              ? FontWeight.bold
+                              : FontWeight.w600,
+                          color: isSelected ? Colors.white : Colors.grey.shade700,
                         ),
                       ),
                     ),

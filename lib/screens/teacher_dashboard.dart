@@ -17,8 +17,6 @@ import '../features/teacher/presentation/widgets/monthly_grid_student_card.dart'
 import '../features/teacher/presentation/widgets/teacher_dashboard_skeleton.dart';
 import '../shared/domain/entities/defaulter_entry.dart';
 import '../shared/domain/entities/kpi_metric.dart';
-import '../shared/widgets/kpi_card.dart';
-import '../shared/widgets/responsive_kpi_grid.dart';
 
 class TeacherDashboard extends StatefulWidget {
   const TeacherDashboard({super.key});
@@ -553,6 +551,33 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
                     title: const Text('Teacher Portal & Attendance Workstation'),
                     elevation: 1,
                     actions: [
+                      if (isWide && user != null)
+                        Center(
+                          child: Padding(
+                            padding: const EdgeInsets.only(right: 8.0),
+                            child: Row(
+                              children: [
+                                CircleAvatar(
+                                  radius: 12,
+                                  backgroundColor: Theme.of(context).primaryColor.withValues(alpha: 0.2),
+                                  child: Text(
+                                    user.fullName.isNotEmpty ? user.fullName[0].toUpperCase() : 'T',
+                                    style: TextStyle(
+                                      color: Theme.of(context).primaryColor,
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 6),
+                                Text(
+                                  user.fullName,
+                                  style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
                       IconButton(
                         icon: const Icon(Icons.person_outline),
                         onPressed: () => ProfileModal.show(context, onProfileUpdated: _loadTeacherData),
@@ -571,22 +596,26 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
                     ],
                   ),
                   SliverPadding(
-                    padding: const EdgeInsets.all(AppSpacing.md),
+                    padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm, vertical: AppSpacing.xs),
                     sliver: SliverList(
                       delegate: SliverChildListDelegate([
-                        // Profile & Welcome Header
-                        _buildTeacherHeaderCard(user, isWide),
-                        const SizedBox(height: AppSpacing.md),
+                        // Single Horizontal Control Toolbar (Class, Date, Status & Action CTA)
+                        _buildSingleControlToolbar(isWide),
+                        const SizedBox(height: AppSpacing.xs),
 
                         // Diagnostics error alert banner
-                        if (_sessionDiagnosticError != null) _buildDiagnosticErrorCard(),
+                        if (_sessionDiagnosticError != null) ...[
+                          _buildDiagnosticErrorCard(),
+                          const SizedBox(height: AppSpacing.xs),
+                        ],
 
                         // Global error message
                         if (_errorMsg != null) ...[
                           Card(
                             color: Colors.orange.shade50,
+                            margin: EdgeInsets.zero,
                             child: Padding(
-                              padding: const EdgeInsets.all(AppSpacing.md),
+                              padding: const EdgeInsets.all(AppSpacing.sm),
                               child: Row(
                                 children: [
                                   Icon(Icons.warning_amber_rounded, color: Colors.orange.shade800),
@@ -601,55 +630,25 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
                               ),
                             ),
                           ),
-                          const SizedBox(height: AppSpacing.md),
+                          const SizedBox(height: AppSpacing.xs),
                         ],
 
-                        // Controls: Class Switcher & Date Picker
-                        _buildControlToolbar(isWide),
-                        const SizedBox(height: AppSpacing.lg),
+                        // Ultra-Compact Micro Stat Chips Bar
+                        if (_summary != null) ...[
+                          _buildMicroStatBar(attendanceTheme),
+                          const SizedBox(height: AppSpacing.xs),
+                        ],
 
-                        // Daily Attendance Session Card
-                        _buildDailyAttendanceCard(isWide),
-                        const SizedBox(height: AppSpacing.lg),
+                        // Interactive Monthly Attendance Register (Starts immediately above fold!)
+                        if (_monthlyGridData != null) _buildMonthlyRegisterGridSection(context),
+
+                        const SizedBox(height: AppSpacing.sm),
+
+                        // Defaulters Alert Deck
+                        if (_defaulters.isNotEmpty) _buildDefaultersSection(context),
                       ]),
                     ),
                   ),
-
-                  // Analytics & KPI Deck
-                  if (_loadingAnalytics)
-                    const SliverToBoxAdapter(
-                      child: Padding(
-                        padding: EdgeInsets.all(AppSpacing.lg),
-                        child: TeacherDashboardSkeleton(),
-                      ),
-                    )
-                  else ...[
-                    if (_summary != null)
-                      SliverPadding(
-                        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
-                        sliver: ResponsiveKpiGrid<KpiMetric>(
-                          items: _buildKpiMetricList(attendanceTheme),
-                          itemBuilder: (ctx, metric) => KpiCard(metric: metric),
-                        ),
-                      ),
-
-                    SliverPadding(
-                      padding: const EdgeInsets.all(AppSpacing.md),
-                      sliver: SliverList(
-                        delegate: SliverChildListDelegate([
-                          const SizedBox(height: AppSpacing.md),
-
-                          // Interactive Monthly Attendance Register
-                          if (_monthlyGridData != null) _buildMonthlyRegisterGridSection(context),
-
-                          const SizedBox(height: AppSpacing.lg),
-
-                          // Defaulters Alert Deck
-                          if (_defaulters.isNotEmpty) _buildDefaultersSection(context),
-                        ]),
-                      ),
-                    ),
-                  ],
                 ],
               ),
             ),
@@ -727,391 +726,235 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
     }
   }
 
-  Widget _buildTeacherHeaderCard(User? user, bool isWide) {
-    return Card(
-      elevation: 2,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      child: Container(
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(16),
-          gradient: LinearGradient(
-            colors: [
-              Theme.of(context).primaryColor,
-              Theme.of(context).primaryColor.withValues(alpha: 0.8),
-            ],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
-        ),
-        padding: EdgeInsets.all(isWide ? 20.0 : 16.0),
-        child: isWide
-            ? Row(
-                children: [
-                  CircleAvatar(
-                    radius: 30,
-                    backgroundColor: Colors.white.withValues(alpha: 0.2),
-                    child: const Icon(Icons.person, size: 36, color: Colors.white),
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Welcome back, ${user?.fullName ?? "Teacher"}!',
-                          style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          '${user?.email ?? ""} • ${_selectedClass?.displayName ?? "No assigned class"}',
-                          style: const TextStyle(color: Colors.white70, fontSize: 13),
-                        ),
-                      ],
-                    ),
-                  ),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.25),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Row(
-                      children: const [
-                        Icon(Icons.verified, color: Colors.white, size: 16),
-                        SizedBox(width: 6),
-                        Text('CLASS TEACHER', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11)),
-                      ],
-                    ),
-                  ),
-                ],
-              )
-            : Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      CircleAvatar(
-                        radius: 22,
-                        backgroundColor: Colors.white.withValues(alpha: 0.2),
-                        child: const Icon(Icons.person, size: 24, color: Colors.white),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Welcome back, ${user?.fullName ?? "Teacher"}!',
-                              style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              _selectedClass?.displayName ?? "No assigned class",
-                              style: const TextStyle(color: Colors.white70, fontSize: 12),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 10),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Expanded(
-                        child: Text(
-                          user?.email ?? "",
-                          style: const TextStyle(color: Colors.white70, fontSize: 11),
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.25),
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: Row(
-                          children: const [
-                            Icon(Icons.verified, color: Colors.white, size: 12),
-                            SizedBox(width: 4),
-                            Text('CLASS TEACHER', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 10)),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-      ),
-    );
-  }
-
-  Widget _buildDiagnosticErrorCard() {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 20),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.red.shade50,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.red.shade300, width: 1.5),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(Icons.error_outline, color: Colors.red.shade700, size: 24),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  'Attendance Session Initialization Failure',
-                  style: TextStyle(color: Colors.red.shade900, fontWeight: FontWeight.bold, fontSize: 16),
-                ),
-              ),
-              IconButton(
-                icon: const Icon(Icons.close, size: 20),
-                onPressed: () => setState(() => _sessionDiagnosticError = null),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Text(
-            _sessionDiagnosticError!,
-            style: TextStyle(color: Colors.red.shade900, fontSize: 13, height: 1.4),
-          ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              ElevatedButton.icon(
-                icon: const Icon(Icons.refresh, size: 16),
-                label: const Text('RETRY SESSION OPEN'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.red.shade700,
-                  foregroundColor: Colors.white,
-                ),
-                onPressed: () => _startSession(),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildControlToolbar(bool isWide) {
-    final (isHoliday, holidayReason) = _getHolidayInfoForDate(_selectedDate);
-
-    return Card(
-      elevation: 2,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Wrap(
-          spacing: 16,
-          runSpacing: 16,
-          crossAxisAlignment: WrapCrossAlignment.center,
-          children: [
-            // Class Selector
-            SizedBox(
-              width: isWide ? 280 : double.infinity,
-              child: SearchableDropdown<SchoolClass>(
-                value: _selectedClass,
-                labelText: 'Select Class Scope',
-                isDense: true,
-                items: _availableClasses,
-                itemAsString: (c) => c.displayName,
-                onChanged: (c) {
-                  if (c != null) {
-                    setState(() => _selectedClass = c);
-                    _loadClassDataAndAnalytics();
-                  }
-                },
-              ),
-            ),
-
-            // Date Selector
-            SizedBox(
-              width: isWide ? 200 : double.infinity,
-              child: OutlinedButton.icon(
-                icon: const Icon(Icons.calendar_today, size: 18),
-                label: Text(
-                  "${_selectedDate.year}-${_selectedDate.month.toString().padLeft(2, '0')}-${_selectedDate.day.toString().padLeft(2, '0')}",
-                  style: const TextStyle(fontWeight: FontWeight.bold),
-                ),
-                onPressed: () async {
-                  final picked = await showDatePicker(
-                    context: context,
-                    initialDate: _selectedDate,
-                    firstDate: DateTime(2025),
-                    lastDate: DateTime(2030),
-                  );
-                  if (picked != null) {
-                    setState(() => _selectedDate = picked);
-                    _loadClassDataAndAnalytics();
-                  }
-                },
-              ),
-            ),
-
-            if (isHoliday)
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                decoration: BoxDecoration(
-                  color: Colors.orange.shade100,
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: Colors.orange.shade400),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(Icons.beach_access, size: 16, color: Colors.orange),
-                    const SizedBox(width: 6),
-                    Flexible(
-                      child: Text(
-                        'Holiday: $holidayReason',
-                        style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.orange.shade900),
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildDailyAttendanceCard(bool isWide) {
+  Widget _buildSingleControlToolbar(bool isWide) {
     final dailySession = _dailySessions[1];
     final isClosed = dailySession?.status == 'closed';
     final isOpen = dailySession?.status == 'open';
     final (isHoliday, holidayReason) = _getHolidayInfoForDate(_selectedDate);
 
-    Color cardBg = Colors.blue.shade50;
-    Color borderColor = Colors.blue.shade200;
-    IconData statusIcon = Icons.event_available;
-    String statusTitle = 'Daily Attendance Not Started';
-    String statusSubtitle =
-        'No attendance recorded for ${_selectedDate.year}-${_selectedDate.month.toString().padLeft(2, '0')}-${_selectedDate.day.toString().padLeft(2, '0')}. Tap below to mark.';
-    String buttonText = 'START DAILY ATTENDANCE';
-    Color buttonColor = Theme.of(context).primaryColor;
+    Color statusColor = Colors.green.shade700;
+    String statusLabel = 'Session Active (Open)';
+    IconData statusIcon = Icons.check_circle_outline;
+    String buttonText = 'CONTINUE / EDIT ATTENDANCE';
 
     if (isHoliday && !isOpen && !isClosed) {
-      cardBg = Colors.orange.shade50;
-      borderColor = Colors.orange.shade300;
+      statusColor = Colors.orange.shade800;
+      statusLabel = 'Holiday ($holidayReason)';
       statusIcon = Icons.beach_access;
-      statusTitle = 'Holiday / School Closed ($holidayReason)';
-      statusSubtitle =
-          'This date is configured as a holiday by school administration. Attendance is not required.';
-      buttonText = 'START ATTENDANCE ANYWAY (OVERRIDE)';
-      buttonColor = Colors.orange.shade900;
+      buttonText = 'OVERRIDE & START';
     } else if (isClosed) {
-      cardBg = Colors.amber.shade50;
-      borderColor = Colors.amber.shade300;
+      statusColor = Colors.amber.shade900;
+      statusLabel = 'Finalized (Locked)';
       statusIcon = Icons.lock;
-      statusTitle = 'Daily Attendance Finalized & Locked';
-      statusSubtitle =
-          'Attendance record for this date is finalized. Tap view to inspect or tap unlock if you need to modify.';
-      buttonText = 'VIEW ATTENDANCE RECORD (LOCKED)';
-      buttonColor = Colors.amber.shade900;
-    } else if (isOpen) {
-      cardBg = Colors.green.shade50;
-      borderColor = Colors.green.shade300;
-      statusIcon = Icons.check_circle_outline;
-      statusTitle = 'Daily Attendance Session Active (Open)';
-      statusSubtitle =
-          'Attendance session is currently active. You can update or submit student attendance marks.';
-      buttonText = 'CONTINUE / EDIT ATTENDANCE';
-      buttonColor = Colors.green.shade800;
+      buttonText = 'VIEW RECORD';
+    } else if (!isOpen) {
+      statusColor = Colors.blue.shade700;
+      statusLabel = 'Not Started';
+      statusIcon = Icons.edit_calendar;
+      buttonText = 'START ATTENDANCE';
     }
 
+    final dateFormatted =
+        "${_selectedDate.year}-${_selectedDate.month.toString().padLeft(2, '0')}-${_selectedDate.day.toString().padLeft(2, '0')}";
+
     return Card(
-      elevation: 2,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: Container(
-        padding: EdgeInsets.all(isWide ? 20 : 16),
-        decoration: BoxDecoration(
-          color: cardBg,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: borderColor, width: 1.5),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
+      elevation: 0,
+      margin: EdgeInsets.zero,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(8),
+        side: BorderSide(color: Theme.of(context).dividerColor),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        child: Wrap(
+          spacing: 12,
+          runSpacing: 6,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          alignment: WrapAlignment.spaceBetween,
           children: [
+            // Class & Date selectors
             Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                SizedBox(
+                  width: 170,
+                  child: SearchableDropdown<SchoolClass>(
+                    value: _selectedClass,
+                    labelText: 'Class',
+                    isDense: true,
+                    items: _availableClasses,
+                    itemAsString: (c) => c.displayName,
+                    onChanged: (c) {
+                      if (c != null) {
+                        setState(() => _selectedClass = c);
+                        _loadClassDataAndAnalytics();
+                      }
+                    },
+                  ),
+                ),
+                const SizedBox(width: 8),
+                OutlinedButton.icon(
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                  ),
+                  icon: const Icon(Icons.calendar_today, size: 14),
+                  label: Text(
+                    dateFormatted,
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                  ),
+                  onPressed: () async {
+                    final picked = await showDatePicker(
+                      context: context,
+                      initialDate: _selectedDate,
+                      firstDate: DateTime(2025),
+                      lastDate: DateTime(2030),
+                    );
+                    if (picked != null) {
+                      setState(() => _selectedDate = picked);
+                      _loadClassDataAndAnalytics();
+                    }
+                  },
+                ),
+              ],
+            ),
+            // Session Status Chip & Primary Action Button
+            Row(
+              mainAxisSize: MainAxisSize.min,
               children: [
                 Container(
-                  padding: EdgeInsets.all(isWide ? 12 : 10),
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                   decoration: BoxDecoration(
-                    color: buttonColor.withValues(alpha: 0.15),
-                    shape: BoxShape.circle,
+                    color: statusColor.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: statusColor.withValues(alpha: 0.3)),
                   ),
-                  child: Icon(statusIcon, color: buttonColor, size: isWide ? 28 : 22),
-                ),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
                     children: [
+                      Icon(statusIcon, size: 14, color: statusColor),
+                      const SizedBox(width: 5),
                       Text(
-                        statusTitle,
+                        statusLabel,
                         style: TextStyle(
-                          fontSize: isWide ? 16 : 14,
+                          fontSize: 11,
                           fontWeight: FontWeight.bold,
-                          color: Colors.black87,
+                          color: statusColor,
                         ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        statusSubtitle,
-                        style: TextStyle(fontSize: 12, color: Colors.grey.shade700),
                       ),
                     ],
                   ),
                 ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            Wrap(
-              spacing: 12,
-              runSpacing: 12,
-              alignment: isWide ? WrapAlignment.end : WrapAlignment.center,
-              children: [
-                if (isClosed && dailySession != null)
-                  SizedBox(
-                    width: isWide ? null : double.infinity,
-                    child: OutlinedButton.icon(
-                      icon: const Icon(Icons.lock_open, size: 18),
-                      label: const Text('UNLOCK SESSION FOR EDITING', style: TextStyle(fontWeight: FontWeight.bold)),
-                      style: OutlinedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-                        foregroundColor: Colors.amber.shade900,
-                        side: BorderSide(color: Colors.amber.shade900, width: 1.5),
-                      ),
-                      onPressed: () => _reopenSession(dailySession.id),
-                    ),
+                const SizedBox(width: 10),
+                if (isClosed && dailySession != null) ...[
+                  IconButton(
+                    icon: const Icon(Icons.lock_open, size: 16),
+                    tooltip: 'Unlock Session',
+                    onPressed: () => _reopenSession(dailySession.id),
                   ),
-                SizedBox(
-                  width: isWide ? null : double.infinity,
-                  child: ElevatedButton.icon(
-                    icon: _isStartingSession
-                        ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                        : Icon(isClosed ? Icons.lock : Icons.how_to_reg, size: 18),
-                    label: Text(buttonText, style: const TextStyle(fontWeight: FontWeight.bold)),
-                    style: ElevatedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-                      backgroundColor: buttonColor,
-                      foregroundColor: Colors.white,
-                    ),
-                    onPressed: _isStartingSession ? null : () => _startSession(),
+                  const SizedBox(width: 4),
+                ],
+                ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: statusColor,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                   ),
+                  icon: _isStartingSession
+                      ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                      : Icon(isClosed ? Icons.lock : Icons.how_to_reg, size: 15),
+                  label: Text(
+                    buttonText,
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11),
+                  ),
+                  onPressed: _isStartingSession ? null : () => _startSession(),
                 ),
               ],
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildDiagnosticErrorCard() {
+    if (_sessionDiagnosticError == null) return const SizedBox.shrink();
+
+    return Card(
+      color: Colors.red.shade50,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(8),
+        side: BorderSide(color: Colors.red.shade200),
+      ),
+      margin: EdgeInsets.zero,
+      child: Padding(
+        padding: const EdgeInsets.all(AppSpacing.sm),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(Icons.error_outline, color: Colors.red.shade800, size: 22),
+            const SizedBox(width: AppSpacing.sm),
+            Expanded(
+              child: Text(
+                _sessionDiagnosticError!,
+                style: TextStyle(
+                  color: Colors.red.shade900,
+                  fontSize: 13,
+                  height: 1.4,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
+            IconButton(
+              icon: Icon(Icons.close, size: 18, color: Colors.red.shade800),
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(),
+              tooltip: 'Dismiss',
+              onPressed: () {
+                setState(() {
+                  _sessionDiagnosticError = null;
+                });
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMicroStatBar(AttendanceTheme? theme) {
+    final metrics = _buildKpiMetricList(theme);
+
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: Wrap(
+        spacing: 8,
+        runSpacing: 6,
+        children: metrics.map((m) {
+          return Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+            decoration: BoxDecoration(
+              color: m.color.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: m.color.withValues(alpha: 0.25)),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(m.icon, size: 14, color: m.color),
+                const SizedBox(width: 6),
+                Text(
+                  m.title,
+                  style: TextStyle(fontSize: 11, color: Colors.grey.shade700, fontWeight: FontWeight.w500),
+                ),
+                const SizedBox(width: 4),
+                Text(
+                  m.value,
+                  style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: m.color),
+                ),
+              ],
+            ),
+          );
+        }).toList(),
       ),
     );
   }
