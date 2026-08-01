@@ -3,10 +3,12 @@ import '../models/app_models.dart';
 import '../services/api_service.dart';
 import '../widgets/searchable_dropdown.dart';
 
+import '../design_system/app_breakpoints.dart';
 import '../design_system/app_spacing.dart';
 import '../features/attendance/presentation/widgets/counter_header.dart';
 import '../features/attendance/presentation/widgets/roster_item.dart';
 import '../shared/widgets/app_skeleton.dart';
+import '../shared/widgets/app_vertical_navbar.dart';
 
 class MarkAttendanceScreen extends StatefulWidget {
   final AttendanceSession session;
@@ -327,7 +329,7 @@ class _MarkAttendanceScreenState extends State<MarkAttendanceScreen> {
     final lateCount = _roster.where((r) => r.status == 'late').length;
     final excusedCount = _roster.where((r) => r.status == 'excused').length;
 
-    return Scaffold(
+    final mainScaffold = Scaffold(
       appBar: AppBar(
         title: Text('${widget.schoolClass.displayName} • Daily Attendance'),
         actions: [
@@ -382,28 +384,44 @@ class _MarkAttendanceScreenState extends State<MarkAttendanceScreen> {
                 constraints: const BoxConstraints(maxWidth: 920),
                 child: CustomScrollView(
                   slivers: [
-                    // Search & Filter Toolbar
+                    // Sticky Header with Summary Stats
                     SliverToBoxAdapter(
                       child: Padding(
                         padding: const EdgeInsets.all(AppSpacing.md),
+                        child: CounterHeader(
+                          dateText: widget.session.sessionDate,
+                          isClosed: _isClosed,
+                          presentCount: presentCount,
+                          absentCount: absentCount,
+                          lateCount: lateCount,
+                          excusedCount: excusedCount,
+                        ),
+                      ),
+                    ),
+
+                    // Sticky Toolbar with Search & Filter Chips
+                    SliverToBoxAdapter(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: AppSpacing.md,
+                          vertical: AppSpacing.xs,
+                        ),
                         child: Column(
                           children: [
                             TextField(
                               controller: _searchCtrl,
                               decoration: InputDecoration(
-                                hintText: 'Search student name or roll number...',
-                                prefixIcon: const Icon(Icons.search, size: 20),
+                                hintText: 'Search student by name or roll number...',
+                                prefixIcon: const Icon(Icons.search),
                                 suffixIcon: _searchCtrl.text.isNotEmpty
                                     ? IconButton(
-                                        icon: const Icon(Icons.clear, size: 18),
+                                        icon: const Icon(Icons.clear),
                                         onPressed: () {
                                           _searchCtrl.clear();
                                           setState(() {});
                                         },
                                       )
                                     : null,
-                                isDense: true,
-                                border: const OutlineInputBorder(),
                               ),
                               onChanged: (_) => setState(() {}),
                             ),
@@ -502,6 +520,39 @@ class _MarkAttendanceScreenState extends State<MarkAttendanceScreen> {
                 ),
               ),
             ),
+    );
+
+    if (context.isMobile) {
+      return mainScaffold;
+    }
+
+    return Scaffold(
+      body: Row(
+        children: [
+          AppVerticalNavbar(
+            selectedIndex: 1,
+            title: 'Workstation',
+            subtitle: widget.schoolClass.displayName,
+            destinations: const [
+              VerticalNavDestination(icon: Icons.arrow_back_rounded, label: 'Back to Portal'),
+              VerticalNavDestination(icon: Icons.how_to_reg_rounded, label: 'Mark Attendance'),
+              VerticalNavDestination(icon: Icons.refresh_rounded, label: 'Refresh Roster'),
+              VerticalNavDestination(icon: Icons.lock_outline, label: 'Lock Session'),
+            ],
+            onDestinationSelected: (idx) {
+              if (idx == 0) {
+                Navigator.pop(context);
+              } else if (idx == 2) {
+                _loadSessionRoster();
+              } else if (idx == 3) {
+                if (!_isClosed) _confirmCloseSession();
+              }
+            },
+          ),
+          const VerticalDivider(thickness: 1, width: 1),
+          Expanded(child: mainScaffold),
+        ],
+      ),
     );
   }
 

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../../design_system/app_breakpoints.dart';
+import '../../../../shared/widgets/app_vertical_navbar.dart';
 
 class AdminNavigation extends StatelessWidget {
   final int selectedIndex;
@@ -13,14 +14,42 @@ class AdminNavigation extends StatelessWidget {
     required this.body,
   });
 
-  static const List<({IconData icon, String label})> destinations = [
-    (icon: Icons.calendar_today, label: 'Sessions'),
-    (icon: Icons.analytics, label: 'Analytics'),
-    (icon: Icons.class_, label: 'Classes'),
-    (icon: Icons.people, label: 'Students'),
-    (icon: Icons.person, label: 'Teachers'),
-    (icon: Icons.assessment, label: 'Reports'),
-    (icon: Icons.date_range, label: 'School Days'),
+  static const List<VerticalNavDestination> navDestinations = [
+    VerticalNavDestination(
+      icon: Icons.calendar_today_outlined,
+      selectedIcon: Icons.calendar_today_rounded,
+      label: 'Sessions',
+    ),
+    VerticalNavDestination(
+      icon: Icons.analytics_outlined,
+      selectedIcon: Icons.analytics_rounded,
+      label: 'Analytics',
+    ),
+    VerticalNavDestination(
+      icon: Icons.class_outlined,
+      selectedIcon: Icons.class_rounded,
+      label: 'Classes',
+    ),
+    VerticalNavDestination(
+      icon: Icons.people_outline_rounded,
+      selectedIcon: Icons.people_rounded,
+      label: 'Students',
+    ),
+    VerticalNavDestination(
+      icon: Icons.person_outline_rounded,
+      selectedIcon: Icons.person_rounded,
+      label: 'Teachers',
+    ),
+    VerticalNavDestination(
+      icon: Icons.assessment_outlined,
+      selectedIcon: Icons.assessment_rounded,
+      label: 'Reports',
+    ),
+    VerticalNavDestination(
+      icon: Icons.date_range_outlined,
+      selectedIcon: Icons.date_range_rounded,
+      label: 'School Days',
+    ),
   ];
 
   @override
@@ -33,7 +62,7 @@ class AdminNavigation extends StatelessWidget {
 
   Widget _buildMobileNavigation(BuildContext context) {
     // 5 primary items: Sessions, Analytics, Classes, Students, More
-    final primaryDestinations = destinations.take(4).toList();
+    final primaryDestinations = navDestinations.take(4).toList();
     final bool isMoreSelected = selectedIndex >= 4;
 
     return Scaffold(
@@ -49,8 +78,8 @@ class AdminNavigation extends StatelessWidget {
                 style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
               ),
             ),
-            ...List.generate(destinations.length, (i) {
-              final d = destinations[i];
+            ...List.generate(navDestinations.length, (i) {
+              final d = navDestinations[i];
               return ListTile(
                 leading: Icon(d.icon),
                 title: Text(d.label),
@@ -90,21 +119,13 @@ class AdminNavigation extends StatelessWidget {
     return Scaffold(
       body: Row(
         children: [
-          NavigationRail(
-            extended: context.isDesktop,
+          AppVerticalNavbar(
             selectedIndex: selectedIndex,
             onDestinationSelected: onDestinationSelected,
-            labelType: context.isDesktop
-                ? NavigationRailLabelType.none
-                : NavigationRailLabelType.selected,
-            destinations: destinations
-                .map(
-                  (d) => NavigationRailDestination(
-                    icon: Icon(d.icon),
-                    label: Text(d.label),
-                  ),
-                )
-                .toList(),
+            destinations: navDestinations,
+            title: 'Admin Portal',
+            subtitle: 'School Management',
+            userRole: 'Administrator',
           ),
           const VerticalDivider(thickness: 1, width: 1),
           Expanded(child: body),

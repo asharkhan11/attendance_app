@@ -15,6 +15,7 @@ import '../features/teacher/domain/entities/student_monthly_row.dart';
 import '../features/teacher/presentation/widgets/defaulter_card.dart';
 import '../features/teacher/presentation/widgets/monthly_grid_student_card.dart';
 import '../features/teacher/presentation/widgets/teacher_dashboard_skeleton.dart';
+import '../features/teacher/presentation/widgets/teacher_navigation.dart';
 import '../shared/domain/entities/defaulter_entry.dart';
 import '../shared/domain/entities/kpi_metric.dart';
 
@@ -27,6 +28,8 @@ class TeacherDashboard extends StatefulWidget {
 
 class _TeacherDashboardState extends State<TeacherDashboard> {
   final ApiService _apiService = ApiService();
+  final ScrollController _scrollCtrl = ScrollController();
+  int _navIndex = 0;
 
   // State selection
   DateTime _selectedDate = DateTime.now();
@@ -539,119 +542,145 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
     final isWide = !context.isMobile;
     final attendanceTheme = Theme.of(context).extension<AttendanceTheme>();
 
-    return Scaffold(
-      body: _isLoadingClasses
-          ? const SafeArea(child: TeacherDashboardSkeleton())
-          : SafeArea(
-              child: CustomScrollView(
-                slivers: [
-                  SliverAppBar(
-                    floating: true,
-                    pinned: true,
-                    title: const Text('Teacher Portal & Attendance Workstation'),
-                    elevation: 1,
-                    actions: [
-                      if (isWide && user != null)
-                        Center(
-                          child: Padding(
-                            padding: const EdgeInsets.only(right: 8.0),
-                            child: Row(
-                              children: [
-                                CircleAvatar(
-                                  radius: 12,
-                                  backgroundColor: Theme.of(context).primaryColor.withValues(alpha: 0.2),
-                                  child: Text(
-                                    user.fullName.isNotEmpty ? user.fullName[0].toUpperCase() : 'T',
-                                    style: TextStyle(
-                                      color: Theme.of(context).primaryColor,
-                                      fontSize: 10,
-                                      fontWeight: FontWeight.bold,
-                                    ),
+    final Widget dashboardBody = _isLoadingClasses
+        ? const SafeArea(child: TeacherDashboardSkeleton())
+        : SafeArea(
+            child: CustomScrollView(
+              controller: _scrollCtrl,
+              slivers: [
+                SliverAppBar(
+                  floating: true,
+                  pinned: true,
+                  title: const Text('Teacher Portal & Attendance Workstation'),
+                  elevation: 1,
+                  actions: [
+                    if (isWide && user != null)
+                      Center(
+                        child: Padding(
+                          padding: const EdgeInsets.only(right: 8.0),
+                          child: Row(
+                            children: [
+                              CircleAvatar(
+                                radius: 12,
+                                backgroundColor: Theme.of(context).primaryColor.withValues(alpha: 0.2),
+                                child: Text(
+                                  user.fullName.isNotEmpty ? user.fullName[0].toUpperCase() : 'T',
+                                  style: TextStyle(
+                                    color: Theme.of(context).primaryColor,
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.bold,
                                   ),
                                 ),
-                                const SizedBox(width: 6),
-                                Text(
-                                  user.fullName,
-                                  style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                              ),
+                              const SizedBox(width: 6),
+                              Text(
+                                user.fullName,
+                                style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    IconButton(
+                      icon: const Icon(Icons.person_outline),
+                      onPressed: () => ProfileModal.show(context, onProfileUpdated: _loadTeacherData),
+                      tooltip: 'My Profile & Security',
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.refresh),
+                      onPressed: _loadTeacherData,
+                      tooltip: 'Refresh Dashboard',
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.logout),
+                      onPressed: () => Provider.of<AuthProvider>(context, listen: false).logout(),
+                      tooltip: 'Logout',
+                    ),
+                  ],
+                ),
+                SliverPadding(
+                  padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm, vertical: AppSpacing.xs),
+                  sliver: SliverList(
+                    delegate: SliverChildListDelegate([
+                      // Single Horizontal Control Toolbar (Class, Date, Status & Action CTA)
+                      _buildSingleControlToolbar(isWide),
+                      const SizedBox(height: AppSpacing.xs),
+
+                      // Diagnostics error alert banner
+                      if (_sessionDiagnosticError != null) ...[
+                        _buildDiagnosticErrorCard(),
+                        const SizedBox(height: AppSpacing.xs),
+                      ],
+
+                      // Global error message
+                      if (_errorMsg != null) ...[
+                        Card(
+                          color: Colors.orange.shade50,
+                          margin: EdgeInsets.zero,
+                          child: Padding(
+                            padding: const EdgeInsets.all(AppSpacing.sm),
+                            child: Row(
+                              children: [
+                                Icon(Icons.warning_amber_rounded, color: Colors.orange.shade800),
+                                const SizedBox(width: AppSpacing.sm),
+                                Expanded(
+                                  child: Text(
+                                    _errorMsg!,
+                                    style: TextStyle(color: Colors.orange.shade900, fontWeight: FontWeight.w600),
+                                  ),
                                 ),
                               ],
                             ),
                           ),
                         ),
-                      IconButton(
-                        icon: const Icon(Icons.person_outline),
-                        onPressed: () => ProfileModal.show(context, onProfileUpdated: _loadTeacherData),
-                        tooltip: 'My Profile & Security',
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.refresh),
-                        onPressed: _loadTeacherData,
-                        tooltip: 'Refresh Dashboard',
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.logout),
-                        onPressed: () => Provider.of<AuthProvider>(context, listen: false).logout(),
-                        tooltip: 'Logout',
-                      ),
-                    ],
-                  ),
-                  SliverPadding(
-                    padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm, vertical: AppSpacing.xs),
-                    sliver: SliverList(
-                      delegate: SliverChildListDelegate([
-                        // Single Horizontal Control Toolbar (Class, Date, Status & Action CTA)
-                        _buildSingleControlToolbar(isWide),
                         const SizedBox(height: AppSpacing.xs),
+                      ],
 
-                        // Diagnostics error alert banner
-                        if (_sessionDiagnosticError != null) ...[
-                          _buildDiagnosticErrorCard(),
-                          const SizedBox(height: AppSpacing.xs),
-                        ],
+                      // Ultra-Compact Micro Stat Chips Bar
+                      if (_summary != null) ...[
+                        _buildMicroStatBar(attendanceTheme),
+                        const SizedBox(height: AppSpacing.xs),
+                      ],
 
-                        // Global error message
-                        if (_errorMsg != null) ...[
-                          Card(
-                            color: Colors.orange.shade50,
-                            margin: EdgeInsets.zero,
-                            child: Padding(
-                              padding: const EdgeInsets.all(AppSpacing.sm),
-                              child: Row(
-                                children: [
-                                  Icon(Icons.warning_amber_rounded, color: Colors.orange.shade800),
-                                  const SizedBox(width: AppSpacing.sm),
-                                  Expanded(
-                                    child: Text(
-                                      _errorMsg!,
-                                      style: TextStyle(color: Colors.orange.shade900, fontWeight: FontWeight.w600),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                          const SizedBox(height: AppSpacing.xs),
-                        ],
+                      // Interactive Monthly Attendance Register (Starts immediately above fold!)
+                      if (_monthlyGridData != null) _buildMonthlyRegisterGridSection(context),
 
-                        // Ultra-Compact Micro Stat Chips Bar
-                        if (_summary != null) ...[
-                          _buildMicroStatBar(attendanceTheme),
-                          const SizedBox(height: AppSpacing.xs),
-                        ],
+                      const SizedBox(height: AppSpacing.sm),
 
-                        // Interactive Monthly Attendance Register (Starts immediately above fold!)
-                        if (_monthlyGridData != null) _buildMonthlyRegisterGridSection(context),
-
-                        const SizedBox(height: AppSpacing.sm),
-
-                        // Defaulters Alert Deck
-                        if (_defaulters.isNotEmpty) _buildDefaultersSection(context),
-                      ]),
-                    ),
+                      // Defaulters Alert Deck
+                      if (_defaulters.isNotEmpty) _buildDefaultersSection(context),
+                    ]),
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
+          );
+
+    return TeacherNavigation(
+      selectedIndex: _navIndex,
+      userFullName: user?.fullName,
+      onProfileTap: () => ProfileModal.show(context, onProfileUpdated: _loadTeacherData),
+      onRefreshTap: _loadTeacherData,
+      onLogoutTap: () => Provider.of<AuthProvider>(context, listen: false).logout(),
+      onDestinationSelected: (idx) {
+        setState(() => _navIndex = idx);
+        if (idx == 0) {
+          if (_scrollCtrl.hasClients) {
+            _scrollCtrl.animateTo(0, duration: const Duration(milliseconds: 300), curve: Curves.easeInOut);
+          }
+        } else if (idx == 1) {
+          if (_scrollCtrl.hasClients) {
+            _scrollCtrl.animateTo(240, duration: const Duration(milliseconds: 300), curve: Curves.easeInOut);
+          }
+        } else if (idx == 2) {
+          if (_scrollCtrl.hasClients) {
+            _scrollCtrl.animateTo(620, duration: const Duration(milliseconds: 300), curve: Curves.easeInOut);
+          }
+        } else if (idx == 3) {
+          ProfileModal.show(context, onProfileUpdated: _loadTeacherData);
+        }
+      },
+      body: dashboardBody,
     );
   }
 
