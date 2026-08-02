@@ -31,6 +31,10 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
   final ScrollController _scrollCtrl = ScrollController();
   int _navIndex = 0;
 
+  // Grid Selection Highlights
+  int? _selectedColumnDay;
+  String? _selectedRowStudentId;
+
   // State selection
   DateTime _selectedDate = DateTime.now();
   SchoolClass? _selectedClass;
@@ -545,13 +549,11 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
     final Widget dashboardBody = _isLoadingClasses
         ? const SafeArea(child: TeacherDashboardSkeleton())
         : SafeArea(
-            child: CustomScrollView(
-              controller: _scrollCtrl,
-              slivers: [
-                SliverAppBar(
-                  floating: true,
-                  pinned: true,
-                  title: const Text('Teacher Portal & Attendance Workstation'),
+            child: Column(
+              children: [
+                // Fixed Top AppBar
+                AppBar(
+                  title: Text(isWide ? 'Teacher Portal & Attendance Workstation' : 'Teacher Portal'),
                   elevation: 1,
                   actions: [
                     if (isWide && user != null)
@@ -598,21 +600,21 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
                     ),
                   ],
                 ),
-                SliverPadding(
+
+                // Fixed Control Toolbar & Micro Stat Bar
+                Padding(
                   padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm, vertical: AppSpacing.xs),
-                  sliver: SliverList(
-                    delegate: SliverChildListDelegate([
-                      // Single Horizontal Control Toolbar (Class, Date, Status & Action CTA)
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
                       _buildSingleControlToolbar(isWide),
                       const SizedBox(height: AppSpacing.xs),
 
-                      // Diagnostics error alert banner
                       if (_sessionDiagnosticError != null) ...[
                         _buildDiagnosticErrorCard(),
                         const SizedBox(height: AppSpacing.xs),
                       ],
 
-                      // Global error message
                       if (_errorMsg != null) ...[
                         Card(
                           color: Colors.orange.shade50,
@@ -636,20 +638,23 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
                         const SizedBox(height: AppSpacing.xs),
                       ],
 
-                      // Ultra-Compact Micro Stat Chips Bar
                       if (_summary != null) ...[
                         _buildMicroStatBar(attendanceTheme),
                         const SizedBox(height: AppSpacing.xs),
                       ],
+                    ],
+                  ),
+                ),
 
-                      // Interactive Monthly Attendance Register (Starts immediately above fold!)
-                      if (_monthlyGridData != null) _buildMonthlyRegisterGridSection(context),
-
-                      const SizedBox(height: AppSpacing.sm),
-
-                      // Defaulters Alert Deck
-                      if (_defaulters.isNotEmpty) _buildDefaultersSection(context),
-                    ]),
+                // Scrollable Monthly Attendance Register Workstation
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
+                    child: _monthlyGridData != null
+                        ? _buildMonthlyRegisterGridSection(context)
+                        : (_defaulters.isNotEmpty
+                            ? SingleChildScrollView(child: _buildDefaultersSection(context))
+                            : const SizedBox.shrink()),
                   ),
                 ),
               ],
@@ -785,6 +790,133 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
 
     final dateFormatted =
         "${_selectedDate.year}-${_selectedDate.month.toString().padLeft(2, '0')}-${_selectedDate.day.toString().padLeft(2, '0')}";
+
+    if (!isWide) {
+      return Card(
+        elevation: 0,
+        margin: EdgeInsets.zero,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(8),
+          side: BorderSide(color: Theme.of(context).dividerColor),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: SearchableDropdown<SchoolClass>(
+                      value: _selectedClass,
+                      labelText: 'Class',
+                      isDense: true,
+                      items: _availableClasses,
+                      itemAsString: (c) => c.displayName,
+                      onChanged: (c) {
+                        if (c != null) {
+                          setState(() => _selectedClass = c);
+                          _loadClassDataAndAnalytics();
+                        }
+                      },
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  InkWell(
+                    onTap: () async {
+                      final picked = await showDatePicker(
+                        context: context,
+                        initialDate: _selectedDate,
+                        firstDate: DateTime(2025),
+                        lastDate: DateTime(2030),
+                      );
+                      if (picked != null) {
+                        setState(() => _selectedDate = picked);
+                        _loadClassDataAndAnalytics();
+                      }
+                    },
+                    borderRadius: BorderRadius.circular(6),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                      decoration: BoxDecoration(
+                        border: Border.all(color: Colors.grey.shade400),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.calendar_month, size: 14, color: Theme.of(context).primaryColor),
+                          const SizedBox(width: 4),
+                          Text(
+                            dateFormatted,
+                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 6),
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: statusColor.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: statusColor.withValues(alpha: 0.3)),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(statusIcon, size: 13, color: statusColor),
+                        const SizedBox(width: 4),
+                        Text(
+                          statusLabel,
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                            color: statusColor,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  if (isClosed && dailySession != null) ...[
+                    const SizedBox(width: 4),
+                    IconButton(
+                      icon: const Icon(Icons.lock_open, size: 16),
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
+                      tooltip: 'Unlock Session',
+                      onPressed: () => _reopenSession(dailySession.id),
+                    ),
+                  ],
+                  const Spacer(),
+                  ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: statusColor,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      minimumSize: const Size(0, 30),
+                    ),
+                    icon: _isStartingSession
+                        ? const SizedBox(width: 12, height: 12, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                        : Icon(isClosed ? Icons.lock : Icons.how_to_reg, size: 13),
+                    label: Text(
+                      buttonText,
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 10),
+                    ),
+                    onPressed: _isStartingSession ? null : () => _startSession(),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      );
+    }
 
     return Card(
       elevation: 0,
@@ -953,42 +1085,79 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
   Widget _buildMicroStatBar(AttendanceTheme? theme) {
     final metrics = _buildKpiMetricList(theme);
 
+    if (context.isMobile) {
+      return SizedBox(
+        height: 28,
+        child: SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Row(
+            children: metrics.map((m) {
+              return Container(
+                margin: const EdgeInsets.only(right: 6),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: m.color.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(color: m.color.withValues(alpha: 0.2)),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(m.icon, size: 12, color: m.color),
+                    const SizedBox(width: 4),
+                    Text(
+                      '${m.title}: ',
+                      style: TextStyle(fontSize: 10, color: Colors.grey.shade700, fontWeight: FontWeight.w500),
+                    ),
+                    Text(
+                      m.value,
+                      style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: m.color),
+                    ),
+                  ],
+                ),
+              );
+            }).toList(),
+          ),
+        ),
+      );
+    }
+
+    final chipList = metrics.map((m) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        decoration: BoxDecoration(
+          color: m.color.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: m.color.withValues(alpha: 0.25)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(m.icon, size: 14, color: m.color),
+            const SizedBox(width: 6),
+            Text(
+              m.title,
+              style: TextStyle(fontSize: 11, color: Colors.grey.shade700, fontWeight: FontWeight.w500),
+            ),
+            const SizedBox(width: 4),
+            Text(
+              m.value,
+              style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: m.color),
+            ),
+          ],
+        ),
+      );
+    }).toList();
+
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 2),
       child: Wrap(
         spacing: 8,
         runSpacing: 6,
-        children: metrics.map((m) {
-          return Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-            decoration: BoxDecoration(
-              color: m.color.withValues(alpha: 0.08),
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: m.color.withValues(alpha: 0.25)),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(m.icon, size: 14, color: m.color),
-                const SizedBox(width: 6),
-                Text(
-                  m.title,
-                  style: TextStyle(fontSize: 11, color: Colors.grey.shade700, fontWeight: FontWeight.w500),
-                ),
-                const SizedBox(width: 4),
-                Text(
-                  m.value,
-                  style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: m.color),
-                ),
-              ],
-            ),
-          );
-        }).toList(),
+        children: chipList,
       ),
     );
   }
-
-
 
   Widget _buildMonthlyRegisterGridSection(BuildContext context) {
     if (_monthlyGridData is! Map) return const SizedBox();
@@ -1006,7 +1175,7 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
       elevation: 2,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: Padding(
-        padding: const EdgeInsets.all(AppSpacing.md),
+        padding: const EdgeInsets.all(AppSpacing.sm),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -1015,209 +1184,325 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
               children: [
                 Row(
                   children: [
-                    const Icon(Icons.grid_on, color: Colors.blue, size: 20),
-                    const SizedBox(width: AppSpacing.sm),
+                    const Icon(Icons.grid_on, color: Colors.blue, size: 18),
+                    const SizedBox(width: 6),
                     Text(
-                      'Monthly Attendance Register',
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+                      isMobile ? 'Monthly Register' : 'Monthly Attendance Register',
+                      style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold),
                     ),
                   ],
                 ),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                   decoration: BoxDecoration(
                     color: Colors.blue.shade50,
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(10),
                     border: Border.all(color: Colors.blue.shade200),
                   ),
                   child: Text(
                     '$monthName ${_selectedDate.year}',
-                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.blue),
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: Colors.blue),
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: AppSpacing.sm),
+            const SizedBox(height: 4),
             // Legend Bar
-            Row(
-              children: [
-                _gridLegendItem('P', 'Present', Colors.green),
-                const SizedBox(width: AppSpacing.sm),
-                _gridLegendItem('A', 'Absent', Colors.red),
-                const SizedBox(width: AppSpacing.sm),
-                _gridLegendItem('L', 'Late', Colors.orange),
-                const SizedBox(width: AppSpacing.sm),
-                _gridLegendItem('E', 'Excused', Colors.blue),
-                const SizedBox(width: AppSpacing.sm),
-                _gridLegendItem('-', 'No Session', Colors.grey),
-              ],
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: [
+                  _gridLegendItem('P', 'Present', Colors.green),
+                  const SizedBox(width: 8),
+                  _gridLegendItem('A', 'Absent', Colors.red),
+                  const SizedBox(width: 8),
+                  _gridLegendItem('L', 'Late', Colors.orange),
+                  const SizedBox(width: 8),
+                  _gridLegendItem('E', 'Excused', Colors.blue),
+                  const SizedBox(width: 8),
+                  _gridLegendItem('-', 'No Session', Colors.grey),
+                ],
+              ),
             ),
-            const SizedBox(height: AppSpacing.md),
+            const SizedBox(height: 6),
 
             // Responsive view branching: Mobile Cards vs Desktop DataTable
             if (isMobile)
-              ListView.builder(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                itemCount: students.length,
-                itemBuilder: (ctx, i) {
-                  final st = students[i];
-                  final roll = (st['roll_number'] ?? '').toString();
-                  final name = (st['full_name'] ?? '').toString();
-                  final stId = (st['student_id'] ?? st['id'] ?? '').toString();
-                  final dailyMap = Map<String, String>.from((st['daily_status'] as Map?) ?? (st['daily'] as Map?) ?? {});
-
-                  final monthlyRow = StudentMonthlyRow(
-                    studentId: stId,
-                    fullName: name,
-                    rollNumber: roll,
-                    admissionNumber: (st['admission_number'] ?? 'N/A').toString(),
-                    dailyStatus: dailyMap,
-                    totalPresent: (st['total_present'] as num?)?.toInt() ?? 0,
-                    totalAbsent: (st['total_absent'] as num?)?.toInt() ?? 0,
-                    totalLate: (st['total_late'] as num?)?.toInt() ?? 0,
-                    totalExcused: (st['total_excused'] as num?)?.toInt() ?? 0,
-                  );
-
-                  final studentMatch = _rosterStudents.where((s) => s.id == stId || s.rollNumber == roll).firstOrNull ??
-                      Student(
-                        id: stId,
-                        schoolId: '',
-                        classId: _selectedClass?.id ?? '',
-                        admissionNumber: (st['admission_number'] ?? 'N/A').toString(),
-                        rollNumber: roll,
-                        fullName: name,
-                        gender: 'other',
-                        isActive: true,
-                        createdAt: DateTime.now().toIso8601String(),
-                      );
-
-                  return MonthlyGridStudentCard(
-                    student: monthlyRow,
-                    daysInMonth: daysInMonth,
-                    selectedDate: _selectedDate,
-                    onTap: () => _showStudentProfileModal(
-                      studentMatch,
-                      gridStudentData: st is Map<String, dynamic> ? st : Map<String, dynamic>.from(st as Map),
-                    ),
-                  );
-                },
-              )
-            else
-              SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: DataTable(
-                  columnSpacing: 8,
-                  headingRowHeight: 36,
-                  dataRowMinHeight: 36,
-                  dataRowMaxHeight: 36,
-                  columns: [
-                    const DataColumn(label: Text('Roll', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold))),
-                    const DataColumn(label: Text('Student Name', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold))),
-                    ...List.generate(daysInMonth, (i) => DataColumn(
-                      label: Container(
-                        alignment: Alignment.center,
-                        width: 20,
-                        child: Text('${i + 1}', style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
-                      ),
-                    )),
-                    const DataColumn(label: Text('Tot P', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.green))),
-                    const DataColumn(label: Text('Tot A', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.red))),
-                  ],
-                  rows: students.map<DataRow>((st) {
+              Expanded(
+                child: ListView.builder(
+                  itemCount: students.length,
+                  itemBuilder: (ctx, i) {
+                    final st = students[i];
                     final roll = (st['roll_number'] ?? '').toString();
                     final name = (st['full_name'] ?? '').toString();
-                    final dailyMap = (st['daily_status'] as Map?) ?? (st['daily'] as Map?) ?? {};
-                    final totP = st['total_present'] ?? 0;
-                    final totA = st['total_absent'] ?? 0;
+                    final stId = (st['student_id'] ?? st['id'] ?? '').toString();
+                    final dailyMap = Map<String, String>.from((st['daily_status'] as Map?) ?? (st['daily'] as Map?) ?? {});
 
-                    return DataRow(
-                      cells: [
-                        DataCell(Text(roll, style: const TextStyle(fontSize: 10))),
-                        DataCell(
-                          InkWell(
-                            onTap: () {
-                              final stId = st['student_id'] ?? st['id'];
-                              final studentMatch = _rosterStudents.where((s) => s.id == stId || s.rollNumber == roll).firstOrNull ??
-                                  Student(
-                                    id: (stId ?? '').toString(),
-                                    schoolId: '',
-                                    classId: _selectedClass?.id ?? '',
-                                    admissionNumber: (st['admission_number'] ?? 'N/A').toString(),
-                                    rollNumber: roll,
-                                    fullName: name,
-                                    gender: 'other',
-                                    isActive: true,
-                                    createdAt: DateTime.now().toIso8601String(),
-                                  );
-                              _showStudentProfileModal(
-                                studentMatch,
-                                gridStudentData: st is Map<String, dynamic>
-                                    ? st
-                                    : Map<String, dynamic>.from(st as Map),
-                              );
-                            },
-                            borderRadius: BorderRadius.circular(4),
-                            child: Padding(
-                              padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 2),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Text(
-                                    name,
-                                    style: TextStyle(
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.bold,
-                                      color: Theme.of(context).primaryColor,
+                    final monthlyRow = StudentMonthlyRow(
+                      studentId: stId,
+                      fullName: name,
+                      rollNumber: roll,
+                      admissionNumber: (st['admission_number'] ?? 'N/A').toString(),
+                      dailyStatus: dailyMap,
+                      totalPresent: (st['total_present'] as num?)?.toInt() ?? 0,
+                      totalAbsent: (st['total_absent'] as num?)?.toInt() ?? 0,
+                      totalLate: (st['total_late'] as num?)?.toInt() ?? 0,
+                      totalExcused: (st['total_excused'] as num?)?.toInt() ?? 0,
+                    );
+
+                    final studentMatch = _rosterStudents.where((s) => s.id == stId || s.rollNumber == roll).firstOrNull ??
+                        Student(
+                          id: stId,
+                          schoolId: '',
+                          classId: _selectedClass?.id ?? '',
+                          admissionNumber: (st['admission_number'] ?? 'N/A').toString(),
+                          rollNumber: roll,
+                          fullName: name,
+                          gender: 'other',
+                          isActive: true,
+                          createdAt: DateTime.now().toIso8601String(),
+                        );
+
+                    return MonthlyGridStudentCard(
+                      student: monthlyRow,
+                      daysInMonth: daysInMonth,
+                      selectedDate: _selectedDate,
+                      onTap: () => _showStudentProfileModal(
+                        studentMatch,
+                        gridStudentData: st is Map<String, dynamic> ? st : Map<String, dynamic>.from(st as Map),
+                      ),
+                    );
+                  },
+                ),
+              )
+            else
+              Expanded(
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // 1. PINNED / FIXED DATE HEADER BAR
+                      Container(
+                        color: Theme.of(context).cardColor,
+                        child: DataTable(
+                          showCheckboxColumn: false,
+                          columnSpacing: 8,
+                          headingRowHeight: 36,
+                          dataRowMinHeight: 0,
+                          dataRowMaxHeight: 0,
+                          columns: [
+                            const DataColumn(label: SizedBox(width: 30, child: Text('Roll', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)))),
+                            const DataColumn(label: SizedBox(width: 140, child: Text('Student Name', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)))),
+                            ...List.generate(daysInMonth, (i) {
+                              final dayNum = i + 1;
+                              final isColSelected = _selectedColumnDay == dayNum;
+                              final primaryColor = Theme.of(context).primaryColor;
+
+                              return DataColumn(
+                                label: InkWell(
+                                  onTap: () {
+                                    setState(() {
+                                      _selectedColumnDay = (_selectedColumnDay == dayNum) ? null : dayNum;
+                                    });
+                                  },
+                                  borderRadius: BorderRadius.circular(4),
+                                  child: Container(
+                                    alignment: Alignment.center,
+                                    width: 22,
+                                    padding: const EdgeInsets.symmetric(vertical: 4),
+                                    decoration: isColSelected
+                                        ? BoxDecoration(
+                                            color: primaryColor.withValues(alpha: 0.25),
+                                            borderRadius: BorderRadius.circular(4),
+                                            border: Border.all(color: primaryColor, width: 1.5),
+                                          )
+                                        : null,
+                                    child: Text(
+                                      '$dayNum',
+                                      style: TextStyle(
+                                        fontSize: isColSelected ? 11 : 10,
+                                        fontWeight: FontWeight.bold,
+                                        color: isColSelected ? primaryColor : Colors.black87,
+                                      ),
                                     ),
                                   ),
-                                  const SizedBox(width: 4),
-                                  Icon(Icons.info_outline, size: 13, color: Theme.of(context).primaryColor),
+                                ),
+                              );
+                            }),
+                            const DataColumn(label: SizedBox(width: 36, child: Text('Tot P', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.green)))),
+                            const DataColumn(label: SizedBox(width: 36, child: Text('Tot A', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.red)))),
+                          ],
+                          rows: const [],
+                        ),
+                      ),
+                      const Divider(height: 1, thickness: 1),
+
+                      // 2. SCROLLABLE STUDENT ROWS (ONLY vertical scrolling here!)
+                      Expanded(
+                        child: SingleChildScrollView(
+                          scrollDirection: Axis.vertical,
+                          child: DataTable(
+                            showCheckboxColumn: false,
+                            columnSpacing: 8,
+                            headingRowHeight: 0,
+                            dataRowMinHeight: 36,
+                            dataRowMaxHeight: 36,
+                            columns: [
+                              const DataColumn(label: SizedBox(width: 30)),
+                              const DataColumn(label: SizedBox(width: 140)),
+                              ...List.generate(daysInMonth, (i) => const DataColumn(label: SizedBox(width: 22))),
+                              const DataColumn(label: SizedBox(width: 36)),
+                              const DataColumn(label: SizedBox(width: 36)),
+                            ],
+                            rows: students.map<DataRow>((st) {
+                              final roll = (st['roll_number'] ?? '').toString();
+                              final name = (st['full_name'] ?? '').toString();
+                              final stId = (st['student_id'] ?? st['id'] ?? roll).toString();
+                              final isRowSelected = _selectedRowStudentId == stId;
+                              final dailyMap = (st['daily_status'] as Map?) ?? (st['daily'] as Map?) ?? {};
+                              final totP = st['total_present'] ?? 0;
+                              final totA = st['total_absent'] ?? 0;
+                              final primaryColor = Theme.of(context).primaryColor;
+
+                              return DataRow(
+                                color: WidgetStateProperty.resolveWith<Color?>((states) {
+                                  if (isRowSelected) {
+                                    return primaryColor.withValues(alpha: 0.08);
+                                  }
+                                  return null;
+                                }),
+                                cells: [
+                                  DataCell(
+                                    InkWell(
+                                      onTap: () {
+                                        setState(() {
+                                          _selectedRowStudentId = isRowSelected ? null : stId;
+                                        });
+                                      },
+                                      child: SizedBox(
+                                        width: 30,
+                                        child: Text(
+                                          roll,
+                                          style: TextStyle(
+                                            fontSize: 10,
+                                            fontWeight: isRowSelected ? FontWeight.bold : FontWeight.normal,
+                                            color: isRowSelected ? primaryColor : Colors.black87,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                  DataCell(
+                                    InkWell(
+                                      onTap: () {
+                                        setState(() {
+                                          _selectedRowStudentId = isRowSelected ? null : stId;
+                                        });
+                                      },
+                                      child: SizedBox(
+                                        width: 140,
+                                        child: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Expanded(
+                                              child: Text(
+                                                name,
+                                                overflow: TextOverflow.ellipsis,
+                                                style: TextStyle(
+                                                  fontSize: 11,
+                                                  fontWeight: FontWeight.bold,
+                                                  color: isRowSelected ? primaryColor : Colors.black87,
+                                                ),
+                                              ),
+                                            ),
+                                            const SizedBox(width: 2),
+                                            IconButton(
+                                              icon: Icon(Icons.info_outline, size: 13, color: primaryColor),
+                                              padding: EdgeInsets.zero,
+                                              constraints: const BoxConstraints(),
+                                              onPressed: () {
+                                                final studentMatch = _rosterStudents.where((s) => s.id == stId || s.rollNumber == roll).firstOrNull ??
+                                                    Student(
+                                                      id: stId,
+                                                      schoolId: '',
+                                                      classId: _selectedClass?.id ?? '',
+                                                      admissionNumber: (st['admission_number'] ?? 'N/A').toString(),
+                                                      rollNumber: roll,
+                                                      fullName: name,
+                                                      gender: 'other',
+                                                      isActive: true,
+                                                      createdAt: DateTime.now().toIso8601String(),
+                                                    );
+                                                _showStudentProfileModal(
+                                                  studentMatch,
+                                                  gridStudentData: st is Map<String, dynamic>
+                                                      ? st
+                                                      : Map<String, dynamic>.from(st as Map),
+                                                );
+                                              },
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                  ...List.generate(daysInMonth, (i) {
+                                    final dayNum = i + 1;
+                                    final isColSelected = _selectedColumnDay == dayNum;
+                                    final dStr = "${_selectedDate.year}-${_selectedDate.month.toString().padLeft(2, '0')}-${dayNum.toString().padLeft(2, '0')}";
+                                    final code = (dailyMap[dStr] ?? dailyMap[dayNum.toString()] ?? '-').toString();
+
+                                    Color badgeBg = Colors.grey.shade100;
+                                    Color textColor = Colors.grey.shade600;
+
+                                    if (code == 'P') {
+                                      badgeBg = Colors.green.shade100;
+                                      textColor = Colors.green.shade900;
+                                    } else if (code == 'A') {
+                                      badgeBg = Colors.red.shade100;
+                                      textColor = Colors.red.shade900;
+                                    } else if (code == 'L') {
+                                      badgeBg = Colors.orange.shade100;
+                                      textColor = Colors.orange.shade900;
+                                    } else if (code == 'E') {
+                                      badgeBg = Colors.blue.shade100;
+                                      textColor = Colors.blue.shade900;
+                                    }
+
+                                    return DataCell(
+                                      Container(
+                                        alignment: Alignment.center,
+                                        width: 22,
+                                        height: 22,
+                                        decoration: BoxDecoration(
+                                          color: badgeBg,
+                                          borderRadius: BorderRadius.circular(4),
+                                          border: isColSelected
+                                              ? Border.all(color: primaryColor, width: 2.0)
+                                              : (isRowSelected ? Border.all(color: primaryColor.withValues(alpha: 0.5), width: 1.0) : null),
+                                        ),
+                                        child: Text(
+                                          code,
+                                          style: TextStyle(
+                                            fontSize: 10,
+                                            fontWeight: FontWeight.bold,
+                                            color: textColor,
+                                          ),
+                                        ),
+                                      ),
+                                    );
+                                  }),
+                                  DataCell(SizedBox(width: 36, child: Text('$totP', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.green.shade800)))),
+                                  DataCell(SizedBox(width: 36, child: Text('$totA', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.red.shade800)))),
                                 ],
-                              ),
-                            ),
+                              );
+                            }).toList(),
                           ),
                         ),
-                        ...List.generate(daysInMonth, (i) {
-                          final dayNum = i + 1;
-                          final dStr = "${_selectedDate.year}-${_selectedDate.month.toString().padLeft(2, '0')}-${dayNum.toString().padLeft(2, '0')}";
-                          final code = (dailyMap[dStr] ?? dailyMap[dayNum.toString()] ?? '-').toString();
-
-                          Color badgeBg = Colors.grey.shade100;
-                          Color textColor = Colors.grey.shade600;
-
-                          if (code == 'P') {
-                            badgeBg = Colors.green.shade100;
-                            textColor = Colors.green.shade900;
-                          } else if (code == 'A') {
-                            badgeBg = Colors.red.shade100;
-                            textColor = Colors.red.shade900;
-                          } else if (code == 'L') {
-                            badgeBg = Colors.orange.shade100;
-                            textColor = Colors.orange.shade900;
-                          } else if (code == 'E') {
-                            badgeBg = Colors.blue.shade100;
-                            textColor = Colors.blue.shade900;
-                          }
-
-                          return DataCell(
-                            Container(
-                              alignment: Alignment.center,
-                              width: 20,
-                              height: 20,
-                              decoration: BoxDecoration(color: badgeBg, borderRadius: BorderRadius.circular(4)),
-                              child: Text(
-                                code,
-                                style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: textColor),
-                              ),
-                            ),
-                          );
-                        }),
-                        DataCell(Text('$totP', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.green.shade800))),
-                        DataCell(Text('$totA', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.red.shade800))),
-                      ],
-                    );
-                  }).toList(),
+                      ),
+                    ],
+                  ),
                 ),
               ),
           ],

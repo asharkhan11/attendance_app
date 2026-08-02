@@ -54,20 +54,23 @@ class TeacherNavigation extends StatelessWidget {
   }
 
   Widget _buildMobileLayout(BuildContext context) {
+    final mobileLabels = ['Workstation', 'Register', 'Defaulters', 'Profile'];
+
     return Scaffold(
       body: body,
       bottomNavigationBar: NavigationBar(
+        height: 62,
         selectedIndex: selectedIndex,
         onDestinationSelected: onDestinationSelected,
-        destinations: destinations
-            .map(
-              (d) => NavigationDestination(
-                icon: Icon(d.icon),
-                selectedIcon: Icon(d.selectedIcon ?? d.icon),
-                label: d.label,
-              ),
-            )
-            .toList(),
+        //  labelBehavior: NavigationBarDestinationLabelBehavior.alwaysShow,
+        destinations: List.generate(destinations.length, (i) {
+          final d = destinations[i];
+          return NavigationDestination(
+            icon: Icon(d.icon, size: 20),
+            selectedIcon: Icon(d.selectedIcon ?? d.icon, size: 22),
+            label: mobileLabels[i],
+          );
+        }),
       ),
     );
   }
