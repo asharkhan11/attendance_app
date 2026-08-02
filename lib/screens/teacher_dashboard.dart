@@ -32,7 +32,7 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
   int _navIndex = 0;
 
   // Grid Selection Highlights
-  int? _selectedColumnDay;
+  int? _selectedColumnDay = DateTime.now().day;
   String? _selectedRowStudentId;
 
   // State selection
@@ -831,7 +831,10 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
                         lastDate: DateTime(2030),
                       );
                       if (picked != null) {
-                        setState(() => _selectedDate = picked);
+                        setState(() {
+                          _selectedDate = picked;
+                          _selectedColumnDay = picked.day;
+                        });
                         _loadClassDataAndAnalytics();
                       }
                     },
@@ -971,7 +974,10 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
                       lastDate: DateTime(2030),
                     );
                     if (picked != null) {
-                      setState(() => _selectedDate = picked);
+                      setState(() {
+                        _selectedDate = picked;
+                        _selectedColumnDay = picked.day;
+                      });
                       _loadClassDataAndAnalytics();
                     }
                   },
