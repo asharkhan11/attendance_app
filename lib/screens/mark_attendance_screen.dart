@@ -522,38 +522,7 @@ class _MarkAttendanceScreenState extends State<MarkAttendanceScreen> {
             ),
     );
 
-    if (context.isMobile) {
-      return mainScaffold;
-    }
-
-    return Scaffold(
-      body: Row(
-        children: [
-          AppVerticalNavbar(
-            selectedIndex: 1,
-            title: 'Workstation',
-            subtitle: widget.schoolClass.displayName,
-            destinations: const [
-              VerticalNavDestination(icon: Icons.arrow_back_rounded, label: 'Back to Portal'),
-              VerticalNavDestination(icon: Icons.how_to_reg_rounded, label: 'Mark Attendance'),
-              VerticalNavDestination(icon: Icons.refresh_rounded, label: 'Refresh Roster'),
-              VerticalNavDestination(icon: Icons.lock_outline, label: 'Lock Session'),
-            ],
-            onDestinationSelected: (idx) {
-              if (idx == 0) {
-                Navigator.pop(context);
-              } else if (idx == 2) {
-                _loadSessionRoster();
-              } else if (idx == 3) {
-                if (!_isClosed) _confirmCloseSession();
-              }
-            },
-          ),
-          const VerticalDivider(thickness: 1, width: 1),
-          Expanded(child: mainScaffold),
-        ],
-      ),
-    );
+    return mainScaffold;
   }
 
   Widget _filterChip(String key, String label) {

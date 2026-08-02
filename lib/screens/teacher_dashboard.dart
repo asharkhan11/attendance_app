@@ -29,7 +29,18 @@ class TeacherDashboard extends StatefulWidget {
 class _TeacherDashboardState extends State<TeacherDashboard> {
   final ApiService _apiService = ApiService();
   final ScrollController _scrollCtrl = ScrollController();
+  final TextEditingController _searchCtrl = TextEditingController();
   int _navIndex = 0;
+
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    _scrollCtrl.dispose();
+    super.dispose();
+  }
+
+  // Navigation & Session State
+  AttendanceSession? _activeMarkingSession;
 
   // Grid Selection Highlights
   int? _selectedColumnDay = DateTime.now().day;
@@ -329,14 +340,10 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
 
         AppLogger.i('TeacherDashboard', 'Daily attendance session opened successfully (ID: ${session.id})');
 
-        await Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (_) => MarkAttendanceScreen(
-              session: session,
-              schoolClass: _selectedClass!,
-            ),
-          ),
-        );
+        setState(() {
+          _activeMarkingSession = session;
+          _navIndex = 1;
+        });
         _loadClassDataAndAnalytics();
       }
     } on ApiException catch (e) {
@@ -546,6 +553,101 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
     final isWide = !context.isMobile;
     final attendanceTheme = Theme.of(context).extension<AttendanceTheme>();
 
+    Widget bodyContent;
+    if (_navIndex == 1) {
+      // Index 1: Mark Attendance Workstation (Renders directly inside persistent shell!)
+      if (_activeMarkingSession != null && _selectedClass != null) {
+        bodyContent = MarkAttendanceScreen(
+          session: _activeMarkingSession!,
+          schoolClass: _selectedClass!,
+        );
+      } else {
+        bodyContent = Center(
+          child: Card(
+            elevation: 2,
+            margin: const EdgeInsets.all(AppSpacing.lg),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            child: Padding(
+              padding: const EdgeInsets.all(AppSpacing.xl),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.how_to_reg_rounded, color: Theme.of(context).primaryColor, size: 56),
+                  const SizedBox(height: AppSpacing.md),
+                  Text(
+                    'Daily Attendance Workstation',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: AppSpacing.xs),
+                  Text(
+                    'Mark daily attendance for ${_selectedClass?.displayName ?? "selected class"} on ${_selectedDate.year}-${_selectedDate.month.toString().padLeft(2, "0")}-${_selectedDate.day.toString().padLeft(2, "0")}.',
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(color: Colors.grey, fontSize: 13),
+                  ),
+                  const SizedBox(height: AppSpacing.lg),
+                  ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Theme.of(context).primaryColor,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                    ),
+                    icon: const Icon(Icons.play_arrow_rounded),
+                    label: const Text('OPEN MARK ATTENDANCE SESSION', style: TextStyle(fontWeight: FontWeight.bold)),
+                    onPressed: _startSession,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      }
+    } else if (_navIndex == 2) {
+      // Index 2: Monthly Register Grid View
+      bodyContent = _monthlyGridData != null
+          ? _buildMonthlyRegisterGridSection(context)
+          : const Center(child: Text('No monthly attendance register data loaded'));
+    } else if (_navIndex == 3) {
+      // Index 3: Defaulters Roster View (< 75%)
+      bodyContent = _defaulters.isNotEmpty
+          ? SingleChildScrollView(
+              padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
+              child: _buildDefaultersSection(context),
+            )
+          : Center(
+              child: Card(
+                elevation: 1,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                child: Padding(
+                  padding: const EdgeInsets.all(AppSpacing.xl),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.check_circle_outline, color: Colors.green.shade600, size: 48),
+                      const SizedBox(height: AppSpacing.md),
+                      const Text(
+                        'No Attendance Defaulters',
+                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                      ),
+                      const SizedBox(height: AppSpacing.xs),
+                      Text(
+                        'All students in ${_selectedClass?.displayName ?? "this class"} meet the mandatory 75% attendance threshold.',
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(color: Colors.grey, fontSize: 13),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+    } else {
+      // Index 0: Workstation Overview
+      bodyContent = _monthlyGridData != null
+          ? _buildMonthlyRegisterGridSection(context)
+          : (_defaulters.isNotEmpty
+              ? SingleChildScrollView(child: _buildDefaultersSection(context))
+              : const SizedBox.shrink());
+    }
+
     final Widget dashboardBody = _isLoadingClasses
         ? const SafeArea(child: TeacherDashboardSkeleton())
         : SafeArea(
@@ -556,47 +658,10 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
                   title: Text(isWide ? 'Teacher Portal & Attendance Workstation' : 'Teacher Portal'),
                   elevation: 1,
                   actions: [
-                    if (isWide && user != null)
-                      Center(
-                        child: Padding(
-                          padding: const EdgeInsets.only(right: 8.0),
-                          child: Row(
-                            children: [
-                              CircleAvatar(
-                                radius: 12,
-                                backgroundColor: Theme.of(context).primaryColor.withValues(alpha: 0.2),
-                                child: Text(
-                                  user.fullName.isNotEmpty ? user.fullName[0].toUpperCase() : 'T',
-                                  style: TextStyle(
-                                    color: Theme.of(context).primaryColor,
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 6),
-                              Text(
-                                user.fullName,
-                                style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    IconButton(
-                      icon: const Icon(Icons.person_outline),
-                      onPressed: () => ProfileModal.show(context, onProfileUpdated: _loadTeacherData),
-                      tooltip: 'My Profile & Security',
-                    ),
                     IconButton(
                       icon: const Icon(Icons.refresh),
                       onPressed: _loadTeacherData,
                       tooltip: 'Refresh Dashboard',
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.logout),
-                      onPressed: () => Provider.of<AuthProvider>(context, listen: false).logout(),
-                      tooltip: 'Logout',
                     ),
                   ],
                 ),
@@ -646,15 +711,11 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
                   ),
                 ),
 
-                // Scrollable Monthly Attendance Register Workstation
+                // Dynamic Body Content based on Navigation Selection
                 Expanded(
                   child: Padding(
                     padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
-                    child: _monthlyGridData != null
-                        ? _buildMonthlyRegisterGridSection(context)
-                        : (_defaulters.isNotEmpty
-                            ? SingleChildScrollView(child: _buildDefaultersSection(context))
-                            : const SizedBox.shrink()),
+                    child: bodyContent,
                   ),
                 ),
               ],
@@ -669,21 +730,6 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
       onLogoutTap: () => Provider.of<AuthProvider>(context, listen: false).logout(),
       onDestinationSelected: (idx) {
         setState(() => _navIndex = idx);
-        if (idx == 0) {
-          if (_scrollCtrl.hasClients) {
-            _scrollCtrl.animateTo(0, duration: const Duration(milliseconds: 300), curve: Curves.easeInOut);
-          }
-        } else if (idx == 1) {
-          if (_scrollCtrl.hasClients) {
-            _scrollCtrl.animateTo(240, duration: const Duration(milliseconds: 300), curve: Curves.easeInOut);
-          }
-        } else if (idx == 2) {
-          if (_scrollCtrl.hasClients) {
-            _scrollCtrl.animateTo(620, duration: const Duration(milliseconds: 300), curve: Curves.easeInOut);
-          }
-        } else if (idx == 3) {
-          ProfileModal.show(context, onProfileUpdated: _loadTeacherData);
-        }
       },
       body: dashboardBody,
     );
@@ -791,136 +837,6 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
     final dateFormatted =
         "${_selectedDate.year}-${_selectedDate.month.toString().padLeft(2, '0')}-${_selectedDate.day.toString().padLeft(2, '0')}";
 
-    if (!isWide) {
-      return Card(
-        elevation: 0,
-        margin: EdgeInsets.zero,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(8),
-          side: BorderSide(color: Theme.of(context).dividerColor),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: SearchableDropdown<SchoolClass>(
-                      value: _selectedClass,
-                      labelText: 'Class',
-                      isDense: true,
-                      items: _availableClasses,
-                      itemAsString: (c) => c.displayName,
-                      onChanged: (c) {
-                        if (c != null) {
-                          setState(() => _selectedClass = c);
-                          _loadClassDataAndAnalytics();
-                        }
-                      },
-                    ),
-                  ),
-                  const SizedBox(width: 6),
-                  InkWell(
-                    onTap: () async {
-                      final picked = await showDatePicker(
-                        context: context,
-                        initialDate: _selectedDate,
-                        firstDate: DateTime(2025),
-                        lastDate: DateTime(2030),
-                      );
-                      if (picked != null) {
-                        setState(() {
-                          _selectedDate = picked;
-                          _selectedColumnDay = picked.day;
-                        });
-                        _loadClassDataAndAnalytics();
-                      }
-                    },
-                    borderRadius: BorderRadius.circular(6),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-                      decoration: BoxDecoration(
-                        border: Border.all(color: Colors.grey.shade400),
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(Icons.calendar_month, size: 14, color: Theme.of(context).primaryColor),
-                          const SizedBox(width: 4),
-                          Text(
-                            dateFormatted,
-                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 6),
-              Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: statusColor.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: statusColor.withValues(alpha: 0.3)),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(statusIcon, size: 13, color: statusColor),
-                        const SizedBox(width: 4),
-                        Text(
-                          statusLabel,
-                          style: TextStyle(
-                            fontSize: 10,
-                            fontWeight: FontWeight.bold,
-                            color: statusColor,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  if (isClosed && dailySession != null) ...[
-                    const SizedBox(width: 4),
-                    IconButton(
-                      icon: const Icon(Icons.lock_open, size: 16),
-                      padding: EdgeInsets.zero,
-                      constraints: const BoxConstraints(),
-                      tooltip: 'Unlock Session',
-                      onPressed: () => _reopenSession(dailySession.id),
-                    ),
-                  ],
-                  const Spacer(),
-                  ElevatedButton.icon(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: statusColor,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                      minimumSize: const Size(0, 30),
-                    ),
-                    icon: _isStartingSession
-                        ? const SizedBox(width: 12, height: 12, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                        : Icon(isClosed ? Icons.lock : Icons.how_to_reg, size: 13),
-                    label: Text(
-                      buttonText,
-                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 10),
-                    ),
-                    onPressed: _isStartingSession ? null : () => _startSession(),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      );
-    }
-
     return Card(
       elevation: 0,
       margin: EdgeInsets.zero,
@@ -929,37 +845,62 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
         side: BorderSide(color: Theme.of(context).dividerColor),
       ),
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-        child: Wrap(
-          spacing: 12,
-          runSpacing: 6,
-          crossAxisAlignment: WrapCrossAlignment.center,
-          alignment: WrapAlignment.spaceBetween,
-          children: [
-            // Class & Date selectors
-            Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                SizedBox(
-                  width: 170,
-                  child: SearchableDropdown<SchoolClass>(
-                    value: _selectedClass,
-                    labelText: 'Class',
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        child: SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Row(
+            children: [
+              // 1. Search Student Field (Height 40px)
+              SizedBox(
+                width: 170,
+                height: 40,
+                child: TextField(
+                  controller: _searchCtrl,
+                  style: const TextStyle(fontSize: 12),
+                  decoration: InputDecoration(
+                    hintText: 'Search student...',
+                    hintStyle: TextStyle(fontSize: 12, color: Colors.grey.shade500),
+                    prefixIcon: const Icon(Icons.search, size: 16),
                     isDense: true,
-                    items: _availableClasses,
-                    itemAsString: (c) => c.displayName,
-                    onChanged: (c) {
-                      if (c != null) {
-                        setState(() => _selectedClass = c);
-                        _loadClassDataAndAnalytics();
-                      }
-                    },
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: BorderSide(color: Theme.of(context).dividerColor),
+                    ),
                   ),
+                  onChanged: (val) => setState(() {}),
                 ),
-                const SizedBox(width: 8),
-                OutlinedButton.icon(
+              ),
+              const SizedBox(width: 8),
+
+              // 2. Class Dropdown Selector (Height 40px)
+              SizedBox(
+                width: 150,
+                height: 40,
+                child: SearchableDropdown<SchoolClass>(
+                  value: _selectedClass,
+                  hintText: 'Select Class',
+                  isDense: true,
+                  items: _availableClasses,
+                  itemAsString: (c) => c.displayName,
+                  onChanged: (c) {
+                    if (c != null) {
+                      setState(() => _selectedClass = c);
+                      _loadClassDataAndAnalytics();
+                    }
+                  },
+                ),
+              ),
+              const SizedBox(width: 8),
+
+              // 3. Date Picker Button (Height 40px)
+              SizedBox(
+                height: 40,
+                child: OutlinedButton.icon(
                   style: OutlinedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                    padding: const EdgeInsets.symmetric(horizontal: 10),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                   ),
                   icon: const Icon(Icons.calendar_today, size: 14),
                   label: Text(
@@ -982,49 +923,54 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
                     }
                   },
                 ),
-              ],
-            ),
-            // Session Status Chip & Primary Action Button
-            Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                  decoration: BoxDecoration(
-                    color: statusColor.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: statusColor.withValues(alpha: 0.3)),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(statusIcon, size: 14, color: statusColor),
-                      const SizedBox(width: 5),
-                      Text(
-                        statusLabel,
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.bold,
-                          color: statusColor,
-                        ),
-                      ),
-                    ],
-                  ),
+              ),
+              const SizedBox(width: 8),
+
+              // 4. Session Status Chip (Height 40px)
+              Container(
+                height: 40,
+                padding: const EdgeInsets.symmetric(horizontal: 10),
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: statusColor.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: statusColor.withValues(alpha: 0.3)),
                 ),
-                const SizedBox(width: 10),
-                if (isClosed && dailySession != null) ...[
-                  IconButton(
-                    icon: const Icon(Icons.lock_open, size: 16),
-                    tooltip: 'Unlock Session',
-                    onPressed: () => _reopenSession(dailySession.id),
-                  ),
-                  const SizedBox(width: 4),
-                ],
-                ElevatedButton.icon(
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(statusIcon, size: 14, color: statusColor),
+                    const SizedBox(width: 6),
+                    Text(
+                      statusLabel,
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                        color: statusColor,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+
+              // 5. Action CTA Button & Unlock Icon (Height 40px)
+              if (isClosed && dailySession != null) ...[
+                IconButton(
+                  icon: const Icon(Icons.lock_open, size: 16),
+                  tooltip: 'Unlock Session',
+                  onPressed: () => _reopenSession(dailySession.id),
+                ),
+                const SizedBox(width: 4),
+              ],
+              SizedBox(
+                height: 40,
+                child: ElevatedButton.icon(
                   style: ElevatedButton.styleFrom(
                     backgroundColor: statusColor,
                     foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                    padding: const EdgeInsets.symmetric(horizontal: 14),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                   ),
                   icon: _isStartingSession
                       ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
@@ -1035,9 +981,9 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
                   ),
                   onPressed: _isStartingSession ? null : () => _startSession(),
                 ),
-              ],
-            ),
-          ],
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -1168,7 +1114,16 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
   Widget _buildMonthlyRegisterGridSection(BuildContext context) {
     if (_monthlyGridData is! Map) return const SizedBox();
     final data = _monthlyGridData as Map;
-    final students = (data['students'] as List?) ?? [];
+    final rawStudents = (data['students'] as List?) ?? [];
+    final searchQuery = _searchCtrl.text.trim().toLowerCase();
+    final students = rawStudents.where((st) {
+      if (searchQuery.isEmpty) return true;
+      if (st is! Map) return false;
+      final name = (st['full_name'] ?? st['name'] ?? '').toString().toLowerCase();
+      final roll = (st['roll_number'] ?? '').toString().toLowerCase();
+      final adm = (st['admission_number'] ?? '').toString().toLowerCase();
+      return name.contains(searchQuery) || roll.contains(searchQuery) || adm.contains(searchQuery);
+    }).toList();
     final daysInMonth = (data['days_in_month'] as num?)?.toInt() ?? 30;
     final monthNames = [
       'January', 'February', 'March', 'April', 'May', 'June',

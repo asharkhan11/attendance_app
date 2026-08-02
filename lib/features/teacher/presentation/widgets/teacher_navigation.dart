@@ -29,19 +29,19 @@ class TeacherNavigation extends StatelessWidget {
       label: 'Workstation',
     ),
     VerticalNavDestination(
+      icon: Icons.how_to_reg_outlined,
+      selectedIcon: Icons.how_to_reg_rounded,
+      label: 'Mark Attendance',
+    ),
+    VerticalNavDestination(
       icon: Icons.calendar_month_outlined,
       selectedIcon: Icons.calendar_month_rounded,
-      label: 'Attendance Register',
+      label: 'Monthly Register',
     ),
     VerticalNavDestination(
       icon: Icons.warning_amber_rounded,
       selectedIcon: Icons.warning_rounded,
-      label: 'Defaulters Deck',
-    ),
-    VerticalNavDestination(
-      icon: Icons.person_outline_rounded,
-      selectedIcon: Icons.person_rounded,
-      label: 'Profile & Security',
+      label: 'Defaulters Roster',
     ),
   ];
 
@@ -54,7 +54,7 @@ class TeacherNavigation extends StatelessWidget {
   }
 
   Widget _buildMobileLayout(BuildContext context) {
-    final mobileLabels = ['Workstation', 'Register', 'Defaulters', 'Profile'];
+    final mobileLabels = ['Workstation', 'Mark', 'Register', 'Defaulters'];
 
     return Scaffold(
       body: body,

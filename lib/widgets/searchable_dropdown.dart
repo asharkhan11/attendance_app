@@ -16,6 +16,7 @@ class SearchableDropdown<T> extends StatefulWidget {
   final InputDecoration? decoration;
   final bool isDense;
   final bool enabled;
+  final bool showSearchIcon;
 
   const SearchableDropdown({
     super.key,
@@ -29,6 +30,7 @@ class SearchableDropdown<T> extends StatefulWidget {
     this.decoration,
     this.isDense = false,
     this.enabled = true,
+    this.showSearchIcon = false,
   });
 
   @override
@@ -174,83 +176,88 @@ class _SearchableDropdownState<T> extends State<SearchableDropdown<T>> {
         ? Offset(0, -contentHeight - 4)
         : Offset(0, size.height + 4);
 
+    final double popupWidth = size.width.clamp(140.0, 240.0);
+
     _overlayEntry = OverlayEntry(
       builder: (context) {
         return CompositedTransformFollower(
           link: _layerLink,
           showWhenUnlinked: false,
           offset: overlayOffset,
-          child: TapRegion(
-            groupId: _tapRegionGroupId,
-            onTapOutside: (_) => _focusNode.unfocus(),
-            child: Material(
-              elevation: 8,
-              borderRadius: BorderRadius.circular(8),
-              color: Theme.of(context).cardColor,
-              child: SizedBox(
-                width: size.width,
-                height: contentHeight,
-                child: StatefulBuilder(
-                  builder: (context, setOverlayState) {
-                    return Container(
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: Colors.grey.shade300),
-                      ),
-                      child: _filteredItems.isEmpty
-                          ? const Padding(
-                              padding: EdgeInsets.all(12.0),
-                              child: Text('No matching results', style: TextStyle(color: Colors.grey, fontSize: 13)),
-                            )
-                          : ListView.builder(
-                              controller: _scrollController,
-                              padding: EdgeInsets.zero,
-                              itemCount: _filteredItems.length,
-                              itemBuilder: (context, index) {
-                                final item = _filteredItems[index];
-                                final isSelected = _isEqual(item, _selectedVal);
-                                final isHighlighted = index == _highlightedIndex;
+          child: Align(
+            alignment: Alignment.topLeft,
+            child: TapRegion(
+              groupId: _tapRegionGroupId,
+              onTapOutside: (_) => _focusNode.unfocus(),
+              child: Material(
+                elevation: 8,
+                borderRadius: BorderRadius.circular(8),
+                color: Theme.of(context).cardColor,
+                child: SizedBox(
+                  width: popupWidth,
+                  height: contentHeight,
+                  child: StatefulBuilder(
+                    builder: (context, setOverlayState) {
+                      return Container(
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: Colors.grey.shade300),
+                        ),
+                        child: _filteredItems.isEmpty
+                            ? const Padding(
+                                padding: EdgeInsets.all(12.0),
+                                child: Text('No matching results', style: TextStyle(color: Colors.grey, fontSize: 13)),
+                              )
+                            : ListView.builder(
+                                controller: _scrollController,
+                                padding: EdgeInsets.zero,
+                                itemCount: _filteredItems.length,
+                                itemBuilder: (context, index) {
+                                  final item = _filteredItems[index];
+                                  final isSelected = _isEqual(item, _selectedVal);
+                                  final isHighlighted = index == _highlightedIndex;
 
-                                return Listener(
-                                  onPointerDown: (_) => _selectItem(item),
-                                  child: MouseRegion(
-                                    onEnter: (_) {
-                                      setOverlayState(() {
-                                        _highlightedIndex = index;
-                                      });
-                                    },
-                                    child: Container(
-                                      height: 40.0,
-                                      color: isHighlighted
-                                          ? Theme.of(context).primaryColor.withValues(alpha: 0.15)
-                                          : (isSelected ? Theme.of(context).primaryColor.withValues(alpha: 0.05) : null),
-                                      padding: const EdgeInsets.symmetric(horizontal: 12),
-                                      alignment: Alignment.centerLeft,
-                                      child: widget.itemBuilder != null
-                                          ? widget.itemBuilder!(context, item, isSelected)
-                                          : Row(
-                                              children: [
-                                                Expanded(
-                                                  child: Text(
-                                                    widget.itemAsString(item),
-                                                    style: TextStyle(
-                                                      fontSize: 13.5,
-                                                      fontWeight: isSelected || isHighlighted ? FontWeight.bold : FontWeight.normal,
-                                                      color: isSelected ? Theme.of(context).primaryColor : null,
+                                  return Listener(
+                                    onPointerDown: (_) => _selectItem(item),
+                                    child: MouseRegion(
+                                      onEnter: (_) {
+                                        setOverlayState(() {
+                                          _highlightedIndex = index;
+                                        });
+                                      },
+                                      child: Container(
+                                        height: 40.0,
+                                        color: isHighlighted
+                                            ? Theme.of(context).primaryColor.withValues(alpha: 0.15)
+                                            : (isSelected ? Theme.of(context).primaryColor.withValues(alpha: 0.05) : null),
+                                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                                        alignment: Alignment.centerLeft,
+                                        child: widget.itemBuilder != null
+                                            ? widget.itemBuilder!(context, item, isSelected)
+                                            : Row(
+                                                children: [
+                                                  Expanded(
+                                                    child: Text(
+                                                      widget.itemAsString(item),
+                                                      style: TextStyle(
+                                                        fontSize: 13,
+                                                        fontWeight: isSelected || isHighlighted ? FontWeight.bold : FontWeight.normal,
+                                                        color: isSelected ? Theme.of(context).primaryColor : null,
+                                                      ),
                                                     ),
                                                   ),
-                                                ),
-                                                if (isSelected)
-                                                  Icon(Icons.check, size: 16, color: Theme.of(context).primaryColor),
-                                              ],
-                                            ),
+                                                  if (isSelected)
+                                                    Icon(Icons.check, size: 16, color: Theme.of(context).primaryColor),
+                                                ],
+                                              ),
+                                      ),
                                     ),
-                                  ),
-                                );
-                              },
-                            ),
-                    );
-                  },
+                                  );
+                                },
+                              ),
+                      );
+                    },
+                  ),
                 ),
               ),
             ),
@@ -275,19 +282,23 @@ class _SearchableDropdownState<T> extends State<SearchableDropdown<T>> {
   Widget build(BuildContext context) {
     final effectiveDecoration = (widget.decoration ??
             InputDecoration(
-              labelText: widget.labelText,
-              hintText: widget.hintText,
-              border: const OutlineInputBorder(),
-              isDense: widget.isDense,
+              hintText: widget.hintText ?? widget.labelText ?? 'Select Class',
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide: BorderSide(color: Theme.of(context).dividerColor),
+              ),
+              isDense: true,
+              contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
             ))
         .copyWith(
-      prefixIcon: const Icon(Icons.search, size: 20),
+      prefixIcon: widget.showSearchIcon ? const Icon(Icons.search, size: 18) : null,
       suffixIcon: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           if (_controller.text.isNotEmpty && _focusNode.hasFocus)
             IconButton(
-              icon: const Icon(Icons.clear, size: 18),
+              icon: const Icon(Icons.clear, size: 16),
               onPressed: () {
                 _controller.clear();
                 setState(() {
@@ -298,8 +309,8 @@ class _SearchableDropdownState<T> extends State<SearchableDropdown<T>> {
                 _updateOverlay();
               },
             ),
-          const Icon(Icons.arrow_drop_down),
-          const SizedBox(width: 8),
+          const Icon(Icons.arrow_drop_down, size: 20),
+          const SizedBox(width: 4),
         ],
       ),
     );
