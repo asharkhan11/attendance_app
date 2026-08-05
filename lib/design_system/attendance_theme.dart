@@ -40,6 +40,19 @@ class AttendanceTheme extends ThemeExtension<AttendanceTheme> {
     noRecordBg: Color(0xFFF1F5F9), // Slate 100
   );
 
+  static const dark = AttendanceTheme(
+    present: Color(0xFF34D399), // Emerald 400
+    absent: Color(0xFFF87171), // Red 400
+    late: Color(0xFFFBBF24), // Amber 400
+    excused: Color(0xFF60A5FA), // Blue 400
+    noRecord: Color(0xFF64748B), // Slate 500
+    presentBg: Color(0xFF064E3B), // Emerald 900
+    absentBg: Color(0xFF7F1D1D), // Red 900
+    lateBg: Color(0xFF78350F), // Amber 900
+    excusedBg: Color(0xFF1E3A5F), // Blue 900
+    noRecordBg: Color(0xFF1E293B), // Slate 800
+  );
+
   @override
   AttendanceTheme copyWith({
     Color? present,

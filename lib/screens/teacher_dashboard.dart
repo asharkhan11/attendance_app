@@ -4,6 +4,7 @@ import '../providers/auth_provider.dart';
 import '../models/app_models.dart';
 import '../services/api_service.dart';
 import '../utils/app_logger.dart';
+import '../services/download_helper.dart';
 import '../widgets/searchable_dropdown.dart';
 import '../widgets/profile_modal.dart';
 import 'mark_attendance_screen.dart';
@@ -12,10 +13,13 @@ import '../design_system/app_breakpoints.dart';
 import '../design_system/app_spacing.dart';
 import '../design_system/attendance_theme.dart';
 import '../features/teacher/domain/entities/student_monthly_row.dart';
+import '../features/teacher/presentation/screens/student_profile_screen.dart';
 import '../features/teacher/presentation/widgets/defaulter_card.dart';
 import '../features/teacher/presentation/widgets/monthly_grid_student_card.dart';
+import '../features/teacher/presentation/widgets/period_selector.dart';
 import '../features/teacher/presentation/widgets/teacher_dashboard_skeleton.dart';
 import '../features/teacher/presentation/widgets/teacher_navigation.dart';
+import '../providers/app_providers.dart';
 import '../shared/domain/entities/defaulter_entry.dart';
 import '../shared/domain/entities/kpi_metric.dart';
 
@@ -48,6 +52,7 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
 
   // State selection
   DateTime _selectedDate = DateTime.now();
+  int _selectedPeriod = 1;
   SchoolClass? _selectedClass;
   List<SchoolClass> _availableClasses = [];
   bool _isLoadingClasses = true;
@@ -265,9 +270,9 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
           }
           _dailySessions = sessionMap;
 
-          // Fetch session roster marks if session exists for selected date
-          if (_dailySessions.containsKey(1)) {
-            final sess = _dailySessions[1]!;
+          // Fetch session roster marks if session exists for selected date and period
+          if (_dailySessions.containsKey(_selectedPeriod)) {
+            final sess = _dailySessions[_selectedPeriod]!;
             try {
               final sessDetail = await _apiService.getAttendanceSession(sess.id);
               if (mounted && sessDetail != null) {
@@ -309,6 +314,35 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
     }
   }
 
+  Future<void> _exportClassCSV() async {
+    if (_selectedClass == null) return;
+    try {
+      final file = await _apiService.exportClassReport(
+        _selectedClass!.id,
+        format: 'csv',
+      );
+      triggerDownload(
+        file.bytes,
+        file.fileName ?? '${_selectedClass!.displayName}_attendance.csv',
+        file.contentType ?? 'text/csv',
+      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Downloaded attendance CSV for ${_selectedClass!.displayName}'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to export CSV: $e'), backgroundColor: Colors.redAccent),
+        );
+      }
+    }
+  }
+
   Future<void> _startSession() async {
     if (_selectedClass == null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -331,7 +365,7 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
       final res = await _apiService.createAttendanceSession({
         'class_id': _selectedClass!.id,
         'session_date': formattedDate,
-        'period_number': 1,
+        'period_number': _selectedPeriod,
       });
 
       if (res != null && mounted) {
@@ -376,136 +410,62 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
   }
 
   void _showStudentProfileModal(Student student, {Map<String, dynamic>? gridStudentData}) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+    double pct = 100.0;
+    int totP = 0;
+    int totA = 0;
+    int totL = 0;
+    int totE = 0;
+    int totalSessions = 0;
+    bool hasSessionData = false;
+
+    // 1. Check passed grid data or search _monthlyGridData
+    Map? stData = gridStudentData;
+    if (stData == null && _monthlyGridData is Map) {
+      final stList = (_monthlyGridData['students'] as List?) ?? [];
+      stData = stList.where((x) {
+        if (x is! Map) return false;
+        final id = (x['student_id'] ?? x['id'])?.toString();
+        final roll = x['roll_number']?.toString();
+        return id == student.id || (roll != null && roll == student.rollNumber);
+      }).firstOrNull as Map?;
+    }
+
+    if (stData != null) {
+      totP = (stData['total_present'] as num?)?.toInt() ?? 0;
+      totA = (stData['total_absent'] as num?)?.toInt() ?? 0;
+      totL = (stData['total_late'] as num?)?.toInt() ?? 0;
+      totE = (stData['total_excused'] as num?)?.toInt() ?? 0;
+      totalSessions = totP + totA + totL + totE;
+      if (totalSessions > 0) {
+        hasSessionData = true;
+        pct = ((totP + totL + totE) / totalSessions) * 100.0;
+      }
+    }
+
+    if (!hasSessionData) {
+      final def = _defaulters.where((d) => d.studentId == student.id).firstOrNull;
+      if (def != null) {
+        pct = def.attendancePercentage;
+        totP = def.present;
+        totA = def.absent;
+        totalSessions = def.totalSessions;
+        hasSessionData = true;
+      }
+    }
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => StudentProfileScreen(
+          student: student,
+          className: _selectedClass?.displayName ?? '',
+          attendancePct: pct,
+          totalPresent: totP,
+          totalAbsent: totA,
+          totalLate: totL,
+          totalExcused: totE,
+        ),
       ),
-      builder: (ctx) {
-        double pct = 100.0;
-        int totP = 0;
-        int totA = 0;
-        int totL = 0;
-        int totE = 0;
-        int totalSessions = 0;
-        bool hasSessionData = false;
-
-        // 1. Check passed grid data or search _monthlyGridData
-        Map? stData = gridStudentData;
-        if (stData == null && _monthlyGridData is Map) {
-          final stList = (_monthlyGridData['students'] as List?) ?? [];
-          stData = stList.where((x) {
-            if (x is! Map) return false;
-            final id = (x['student_id'] ?? x['id'])?.toString();
-            final roll = x['roll_number']?.toString();
-            return id == student.id || (roll != null && roll == student.rollNumber);
-          }).firstOrNull as Map?;
-        }
-
-        if (stData != null) {
-          totP = (stData['total_present'] as num?)?.toInt() ?? 0;
-          totA = (stData['total_absent'] as num?)?.toInt() ?? 0;
-          totL = (stData['total_late'] as num?)?.toInt() ?? 0;
-          totE = (stData['total_excused'] as num?)?.toInt() ?? 0;
-          totalSessions = totP + totA + totL + totE;
-          if (totalSessions > 0) {
-            hasSessionData = true;
-            pct = ((totP + totL + totE) / totalSessions) * 100.0;
-          }
-        }
-
-        // 2. Fallback to defaulters list if no grid data found
-        if (!hasSessionData) {
-          final def = _defaulters.where((d) => d.studentId == student.id).firstOrNull;
-          if (def != null) {
-            pct = def.attendancePercentage;
-            totP = def.present;
-            totA = def.absent;
-            totalSessions = def.totalSessions;
-            hasSessionData = true;
-          }
-        }
-
-        final formattedDob = student.dob != null && student.dob!.isNotEmpty
-            ? student.dob!.split('T')[0]
-            : 'N/A';
-
-        final rateDisplay = hasSessionData
-            ? '${pct.toStringAsFixed(1)}% ($totP/$totalSessions sessions marked)'
-            : '100.0% (No sessions marked)';
-
-        return Padding(
-          padding: const EdgeInsets.all(24.0),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  CircleAvatar(
-                    radius: 28,
-                    backgroundColor: Theme.of(context).primaryColor,
-                    child: Text(
-                      student.fullName.isNotEmpty ? student.fullName[0].toUpperCase() : 'S',
-                      style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold),
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(student.fullName, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-                        Text('Roll No: ${student.rollNumber} • Admission: ${student.admissionNumber}',
-                            style: TextStyle(color: Colors.grey.shade700, fontSize: 13)),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-              const Divider(height: 32),
-              _profileDetailTile(Icons.class_, 'Class', _selectedClass?.displayName ?? '-'),
-              _profileDetailTile(Icons.person_outline, 'Guardian Name', student.guardianName ?? 'N/A'),
-              _profileDetailTile(Icons.phone_outlined, 'Guardian Phone', student.guardianPhone ?? 'N/A'),
-              _profileDetailTile(Icons.cake_outlined, 'Date of Birth', formattedDob),
-              _profileDetailTile(
-                Icons.analytics_outlined,
-                'Attendance Rate',
-                rateDisplay,
-                color: pct < 75 ? Colors.red : Colors.green,
-              ),
-              if (hasSessionData) ...[
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    _miniStatChip('Present: $totP', Colors.green),
-                    const SizedBox(width: 8),
-                    _miniStatChip('Absent: $totA', Colors.red),
-                    if (totL > 0) ...[
-                      const SizedBox(width: 8),
-                      _miniStatChip('Late: $totL', Colors.orange),
-                    ],
-                    if (totE > 0) ...[
-                      const SizedBox(width: 8),
-                      _miniStatChip('Excused: $totE', Colors.blue),
-                    ],
-                  ],
-                ),
-              ],
-              const SizedBox(height: 20),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton.icon(
-                  icon: const Icon(Icons.close),
-                  label: const Text('CLOSE'),
-                  onPressed: () => Navigator.pop(ctx),
-                ),
-              ),
-            ],
-          ),
-        );
-      },
     );
   }
 
@@ -658,6 +618,12 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
                   title: Text(isWide ? 'Teacher Portal & Attendance Workstation' : 'Teacher Portal'),
                   elevation: 1,
                   actions: [
+                    if (_selectedClass != null)
+                      IconButton(
+                        icon: const Icon(Icons.download_rounded),
+                        tooltip: 'Export Class Attendance (CSV)',
+                        onPressed: _exportClassCSV,
+                      ),
                     IconButton(
                       icon: const Icon(Icons.refresh),
                       onPressed: _loadTeacherData,
@@ -807,7 +773,7 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
   }
 
   Widget _buildSingleControlToolbar(bool isWide) {
-    final dailySession = _dailySessions[1];
+    final dailySession = _dailySessions[_selectedPeriod];
     final isClosed = dailySession?.status == 'closed';
     final isOpen = dailySession?.status == 'open';
     final (isHoliday, holidayReason) = _getHolidayInfoForDate(_selectedDate);
@@ -923,6 +889,16 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
                     }
                   },
                 ),
+              ),
+              const SizedBox(width: 8),
+
+              // Period Selector (Visible only when AttendanceMode is periodWise)
+              PeriodSelector(
+                selectedPeriod: _selectedPeriod,
+                onPeriodChanged: (p) {
+                  setState(() => _selectedPeriod = p);
+                  _loadClassDataAndAnalytics();
+                },
               ),
               const SizedBox(width: 8),
 

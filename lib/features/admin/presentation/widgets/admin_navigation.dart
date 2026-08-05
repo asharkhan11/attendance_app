@@ -1,20 +1,36 @@
 import 'package:flutter/material.dart';
 import '../../../../design_system/app_breakpoints.dart';
+import '../../../../providers/app_providers.dart';
 import '../../../../shared/widgets/app_vertical_navbar.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-class AdminNavigation extends StatelessWidget {
+class AdminNavigation extends ConsumerWidget {
   final int selectedIndex;
   final ValueChanged<int> onDestinationSelected;
   final Widget body;
+  final String? userFullName;
+  final VoidCallback? onRefreshTap;
+  final VoidCallback? onProfileTap;
+  final VoidCallback? onLogoutTap;
 
   const AdminNavigation({
     super.key,
     required this.selectedIndex,
     required this.onDestinationSelected,
     required this.body,
+    this.userFullName,
+    this.onRefreshTap,
+    this.onProfileTap,
+    this.onLogoutTap,
   });
 
+  // 8 tabs: Overview(0) + 7 existing (shifted +1)
   static const List<VerticalNavDestination> navDestinations = [
+    VerticalNavDestination(
+      icon: Icons.home_outlined,
+      selectedIcon: Icons.home_rounded,
+      label: 'Overview',
+    ),
     VerticalNavDestination(
       icon: Icons.calendar_today_outlined,
       selectedIcon: Icons.calendar_today_rounded,
@@ -53,17 +69,19 @@ class AdminNavigation extends StatelessWidget {
   ];
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final isDark = ref.watch(themeProvider) == ThemeMode.dark;
     if (context.isMobile) {
-      return _buildMobileNavigation(context);
+      return _buildMobileNavigation(context, ref, isDark);
     }
-    return _buildDesktopNavigation(context);
+    return _buildDesktopNavigation(context, ref);
   }
 
-  Widget _buildMobileNavigation(BuildContext context) {
-    // 5 primary items: Sessions, Analytics, Classes, Students, More
-    final primaryDestinations = navDestinations.take(4).toList();
-    final bool isMoreSelected = selectedIndex >= 4;
+  Widget _buildMobileNavigation(BuildContext context, WidgetRef ref, bool isDark) {
+    // Mobile bottom bar shows 5: Overview, Sessions, Analytics, Students, More
+    const primaryCount = 4;
+    final primaryDestinations = navDestinations.take(primaryCount).toList();
+    final bool isMoreSelected = selectedIndex >= primaryCount;
 
     return Scaffold(
       body: body,
@@ -71,32 +89,69 @@ class AdminNavigation extends StatelessWidget {
         child: ListView(
           padding: EdgeInsets.zero,
           children: [
-            const DrawerHeader(
-              decoration: BoxDecoration(color: Color(0xFF4F46E5)),
-              child: Text(
-                'Admin Management',
-                style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
+            DrawerHeader(
+              decoration: const BoxDecoration(color: Color(0xFF4F46E5)),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  const Icon(Icons.school, color: Colors.white, size: 32),
+                  const SizedBox(height: 8),
+                  const Text(
+                    'Admin Portal',
+                    style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
+                  ),
+                  if (userFullName != null)
+                    Text(
+                      userFullName!,
+                      style: const TextStyle(color: Colors.white70, fontSize: 13),
+                    ),
+                ],
               ),
             ),
             ...List.generate(navDestinations.length, (i) {
               final d = navDestinations[i];
               return ListTile(
-                leading: Icon(d.icon),
-                title: Text(d.label),
+                leading: Icon(
+                  selectedIndex == i ? (d.selectedIcon ?? d.icon) : d.icon,
+                  color: selectedIndex == i ? const Color(0xFF4F46E5) : null,
+                ),
+                title: Text(
+                  d.label,
+                  style: TextStyle(
+                    color: selectedIndex == i ? const Color(0xFF4F46E5) : null,
+                    fontWeight: selectedIndex == i ? FontWeight.bold : FontWeight.normal,
+                  ),
+                ),
                 selected: selectedIndex == i,
+                selectedTileColor: const Color(0xFF4F46E5).withValues(alpha: 0.08),
                 onTap: () {
                   Navigator.pop(context);
                   onDestinationSelected(i);
                 },
               );
             }),
+            const Divider(),
+            // Dark mode toggle in drawer
+            SwitchListTile(
+              secondary: Icon(isDark ? Icons.dark_mode : Icons.light_mode_outlined),
+              title: const Text('Dark Mode'),
+              value: isDark,
+              onChanged: (_) => ref.read(themeProvider.notifier).toggle(),
+            ),
+            if (onLogoutTap != null)
+              ListTile(
+                leading: const Icon(Icons.logout, color: Colors.red),
+                title: const Text('Logout', style: TextStyle(color: Colors.red)),
+                onTap: onLogoutTap,
+              ),
           ],
         ),
       ),
       bottomNavigationBar: NavigationBar(
-        selectedIndex: isMoreSelected ? 4 : selectedIndex,
+        selectedIndex: isMoreSelected ? primaryCount : selectedIndex,
         onDestinationSelected: (idx) {
-          if (idx == 4) {
+          if (idx == primaryCount) {
             Scaffold.of(context).openDrawer();
           } else {
             onDestinationSelected(idx);
@@ -104,7 +159,11 @@ class AdminNavigation extends StatelessWidget {
         },
         destinations: [
           ...primaryDestinations.map(
-            (d) => NavigationDestination(icon: Icon(d.icon), label: d.label),
+            (d) => NavigationDestination(
+              icon: Icon(d.icon),
+              selectedIcon: Icon(d.selectedIcon ?? d.icon),
+              label: d.label,
+            ),
           ),
           const NavigationDestination(
             icon: Icon(Icons.more_horiz),
@@ -115,7 +174,7 @@ class AdminNavigation extends StatelessWidget {
     );
   }
 
-  Widget _buildDesktopNavigation(BuildContext context) {
+  Widget _buildDesktopNavigation(BuildContext context, WidgetRef ref) {
     return Scaffold(
       body: Row(
         children: [
@@ -125,7 +184,11 @@ class AdminNavigation extends StatelessWidget {
             destinations: navDestinations,
             title: 'Admin Portal',
             subtitle: 'School Management',
+            userFullName: userFullName,
             userRole: 'Administrator',
+            onRefreshTap: onRefreshTap,
+            onProfileTap: onProfileTap,
+            onLogoutTap: onLogoutTap,
           ),
           const VerticalDivider(thickness: 1, width: 1),
           Expanded(child: body),

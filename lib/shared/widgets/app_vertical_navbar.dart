@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../design_system/app_breakpoints.dart';
 import '../../design_system/app_radius.dart';
 import '../../design_system/app_spacing.dart';
+import '../../providers/app_providers.dart';
 
 class VerticalNavDestination {
   final IconData icon;
@@ -17,7 +19,7 @@ class VerticalNavDestination {
   });
 }
 
-class AppVerticalNavbar extends StatelessWidget {
+class AppVerticalNavbar extends ConsumerWidget {
   final int selectedIndex;
   final ValueChanged<int> onDestinationSelected;
   final List<VerticalNavDestination> destinations;
@@ -44,20 +46,18 @@ class AppVerticalNavbar extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
     final isExpanded = context.isDesktop;
+    final isDark = ref.watch(themeProvider) == ThemeMode.dark;
 
     return Container(
       width: isExpanded ? 240.0 : 72.0,
       color: theme.colorScheme.surface,
       child: Column(
         children: [
-          // Header Branding
           _buildHeader(context, isExpanded),
           const Divider(height: 1, thickness: 1),
-
-          // Navigation Destinations
           Expanded(
             child: ListView.builder(
               padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
@@ -69,11 +69,8 @@ class AppVerticalNavbar extends StatelessWidget {
               },
             ),
           ),
-
           const Divider(height: 1, thickness: 1),
-
-          // Footer User Profile & Actions
-          _buildFooter(context, isExpanded),
+          _buildFooter(context, ref, isExpanded, isDark),
         ],
       ),
     );
@@ -104,20 +101,14 @@ class AppVerticalNavbar extends StatelessWidget {
                 children: [
                   Text(
                     title,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 14,
-                    ),
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
                   if (subtitle != null)
                     Text(
                       subtitle!,
-                      style: TextStyle(
-                        color: Colors.grey.shade600,
-                        fontSize: 11,
-                      ),
+                      style: TextStyle(color: Colors.grey.shade600, fontSize: 11),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
@@ -139,6 +130,8 @@ class AppVerticalNavbar extends StatelessWidget {
   ) {
     final theme = Theme.of(context);
     final activeColor = theme.primaryColor;
+    final iconColor = isSelected ? activeColor : theme.colorScheme.onSurfaceVariant;
+    final textColor = isSelected ? activeColor : theme.colorScheme.onSurfaceVariant;
 
     if (!isExpanded) {
       return Padding(
@@ -158,7 +151,7 @@ class AppVerticalNavbar extends StatelessWidget {
               child: Center(
                 child: Icon(
                   isSelected ? (dest.selectedIcon ?? dest.icon) : dest.icon,
-                  color: isSelected ? activeColor : Colors.grey.shade700,
+                  color: iconColor,
                   size: 22,
                 ),
               ),
@@ -186,7 +179,7 @@ class AppVerticalNavbar extends StatelessWidget {
             children: [
               Icon(
                 isSelected ? (dest.selectedIcon ?? dest.icon) : dest.icon,
-                color: isSelected ? activeColor : Colors.grey.shade700,
+                color: iconColor,
                 size: 20,
               ),
               const SizedBox(width: AppSpacing.sm),
@@ -196,7 +189,7 @@ class AppVerticalNavbar extends StatelessWidget {
                   style: TextStyle(
                     fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
                     fontSize: 13,
-                    color: isSelected ? activeColor : Colors.grey.shade800,
+                    color: textColor,
                   ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
@@ -221,7 +214,7 @@ class AppVerticalNavbar extends StatelessWidget {
     );
   }
 
-  Widget _buildFooter(BuildContext context, bool isExpanded) {
+  Widget _buildFooter(BuildContext context, WidgetRef ref, bool isExpanded, bool isDark) {
     final theme = Theme.of(context);
     final user = userFullName ?? 'User';
     final initial = user.isNotEmpty ? user[0].toUpperCase() : 'U';
@@ -231,6 +224,12 @@ class AppVerticalNavbar extends StatelessWidget {
         padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
         child: Column(
           children: [
+            // Dark mode toggle (icon-only in collapsed mode)
+            IconButton(
+              icon: Icon(isDark ? Icons.light_mode_outlined : Icons.dark_mode_outlined, size: 20),
+              onPressed: () => ref.read(themeProvider.notifier).toggle(),
+              tooltip: isDark ? 'Switch to Light Mode' : 'Switch to Dark Mode',
+            ),
             if (onRefreshTap != null)
               IconButton(
                 icon: const Icon(Icons.refresh, size: 20),
@@ -287,11 +286,27 @@ class AppVerticalNavbar extends StatelessWidget {
                     if (userRole != null)
                       Text(
                         userRole!,
-                        style: TextStyle(color: Colors.grey.shade600, fontSize: 10),
+                        style: TextStyle(color: theme.colorScheme.onSurfaceVariant, fontSize: 10),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
                   ],
+                ),
+              ),
+              // Dark mode toggle button
+              Tooltip(
+                message: isDark ? 'Light Mode' : 'Dark Mode',
+                child: InkWell(
+                  onTap: () => ref.read(themeProvider.notifier).toggle(),
+                  borderRadius: BorderRadius.circular(AppRadius.sm),
+                  child: Padding(
+                    padding: const EdgeInsets.all(4),
+                    child: Icon(
+                      isDark ? Icons.light_mode_outlined : Icons.dark_mode_outlined,
+                      size: 16,
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
                 ),
               ),
               if (onProfileTap != null)
