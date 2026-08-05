@@ -33,21 +33,77 @@ class AppTheme {
   static ThemeData get lightTheme {
     final textTheme = GoogleFonts.interTextTheme(
       const TextTheme(
-        displayLarge: TextStyle(color: _textPrimaryLight, fontWeight: FontWeight.bold, letterSpacing: -1.0),
-        displayMedium: TextStyle(color: _textPrimaryLight, fontWeight: FontWeight.bold, letterSpacing: -0.8),
-        displaySmall: TextStyle(color: _textPrimaryLight, fontWeight: FontWeight.bold, letterSpacing: -0.5),
-        headlineLarge: TextStyle(color: _textPrimaryLight, fontWeight: FontWeight.bold, letterSpacing: -0.5),
-        headlineMedium: TextStyle(color: _textPrimaryLight, fontWeight: FontWeight.w600, letterSpacing: -0.2),
-        headlineSmall: TextStyle(color: _textPrimaryLight, fontWeight: FontWeight.w600, letterSpacing: -0.2),
-        titleLarge: TextStyle(color: _textPrimaryLight, fontWeight: FontWeight.w600, fontSize: 20),
-        titleMedium: TextStyle(color: _textPrimaryLight, fontWeight: FontWeight.w500, fontSize: 16),
-        titleSmall: TextStyle(color: _textPrimaryLight, fontWeight: FontWeight.w500, fontSize: 14),
-        bodyLarge: TextStyle(color: _textPrimaryLight, fontSize: 16, height: 1.5),
-        bodyMedium: TextStyle(color: _textSecondaryLight, fontSize: 14, height: 1.5),
+        displayLarge: TextStyle(
+          color: _textPrimaryLight,
+          fontWeight: FontWeight.bold,
+          letterSpacing: -1.0,
+        ),
+        displayMedium: TextStyle(
+          color: _textPrimaryLight,
+          fontWeight: FontWeight.bold,
+          letterSpacing: -0.8,
+        ),
+        displaySmall: TextStyle(
+          color: _textPrimaryLight,
+          fontWeight: FontWeight.bold,
+          letterSpacing: -0.5,
+        ),
+        headlineLarge: TextStyle(
+          color: _textPrimaryLight,
+          fontWeight: FontWeight.bold,
+          letterSpacing: -0.5,
+        ),
+        headlineMedium: TextStyle(
+          color: _textPrimaryLight,
+          fontWeight: FontWeight.w600,
+          letterSpacing: -0.2,
+        ),
+        headlineSmall: TextStyle(
+          color: _textPrimaryLight,
+          fontWeight: FontWeight.w600,
+          letterSpacing: -0.2,
+        ),
+        titleLarge: TextStyle(
+          color: _textPrimaryLight,
+          fontWeight: FontWeight.w600,
+          fontSize: 20,
+        ),
+        titleMedium: TextStyle(
+          color: _textPrimaryLight,
+          fontWeight: FontWeight.w500,
+          fontSize: 16,
+        ),
+        titleSmall: TextStyle(
+          color: _textPrimaryLight,
+          fontWeight: FontWeight.w500,
+          fontSize: 14,
+        ),
+        bodyLarge: TextStyle(
+          color: _textPrimaryLight,
+          fontSize: 16,
+          height: 1.5,
+        ),
+        bodyMedium: TextStyle(
+          color: _textSecondaryLight,
+          fontSize: 14,
+          height: 1.5,
+        ),
         bodySmall: TextStyle(color: _textMutedLight, fontSize: 12, height: 1.4),
-        labelLarge: TextStyle(color: _textPrimaryLight, fontWeight: FontWeight.w600, fontSize: 14),
-        labelMedium: TextStyle(color: _textSecondaryLight, fontWeight: FontWeight.w500, fontSize: 12),
-        labelSmall: TextStyle(color: _textMutedLight, fontWeight: FontWeight.w500, fontSize: 10),
+        labelLarge: TextStyle(
+          color: _textPrimaryLight,
+          fontWeight: FontWeight.w600,
+          fontSize: 14,
+        ),
+        labelMedium: TextStyle(
+          color: _textSecondaryLight,
+          fontWeight: FontWeight.w500,
+          fontSize: 12,
+        ),
+        labelSmall: TextStyle(
+          color: _textMutedLight,
+          fontWeight: FontWeight.w500,
+          fontSize: 10,
+        ),
       ),
     );
 
@@ -102,12 +158,30 @@ class AppTheme {
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
         fillColor: _surfaceLight,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: _borderLight, width: 1.5)),
-        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: _borderLight, width: 1.5)),
-        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: _primaryLight, width: 2)),
-        errorBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: _error, width: 1.5)),
-        focusedErrorBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: _error, width: 2)),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 16,
+        ),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: _borderLight, width: 1.5),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: _borderLight, width: 1.5),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: _primaryLight, width: 2),
+        ),
+        errorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: _error, width: 1.5),
+        ),
+        focusedErrorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: _error, width: 2),
+        ),
         labelStyle: const TextStyle(color: _textSecondaryLight, fontSize: 14),
         hintStyle: const TextStyle(color: _textMutedLight, fontSize: 14),
         prefixIconColor: _textSecondaryLight,
@@ -121,8 +195,14 @@ class AppTheme {
           elevation: 0,
           shadowColor: Colors.transparent,
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          textStyle: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600, letterSpacing: 0.2),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          textStyle: const TextStyle(
+            fontSize: 15,
+            fontWeight: FontWeight.w600,
+            letterSpacing: 0.2,
+          ),
         ),
       ),
 
@@ -131,8 +211,14 @@ class AppTheme {
           foregroundColor: _primaryLight,
           side: const BorderSide(color: _borderLight, width: 1.5),
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          textStyle: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600, letterSpacing: 0.2),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          textStyle: const TextStyle(
+            fontSize: 15,
+            fontWeight: FontWeight.w600,
+            letterSpacing: 0.2,
+          ),
         ),
       ),
 
@@ -140,14 +226,18 @@ class AppTheme {
         style: TextButton.styleFrom(
           foregroundColor: _primaryLight,
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
+          ),
           textStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
         ),
       ),
 
       checkboxTheme: CheckboxThemeData(
-        fillColor: WidgetStateProperty.resolveWith<Color?>((states) =>
-            states.contains(WidgetState.selected) ? _primaryLight : null),
+        fillColor: WidgetStateProperty.resolveWith<Color?>(
+          (states) =>
+              states.contains(WidgetState.selected) ? _primaryLight : null,
+        ),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
         side: const BorderSide(color: Color(0xFFCBD5E1), width: 1.5),
       ),
@@ -156,18 +246,31 @@ class AppTheme {
         backgroundColor: _surfaceLight,
         elevation: 0,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        titleTextStyle: const TextStyle(color: _textPrimaryLight, fontSize: 20, fontWeight: FontWeight.w700),
-        contentTextStyle: const TextStyle(color: _textSecondaryLight, fontSize: 15),
+        titleTextStyle: const TextStyle(
+          color: _textPrimaryLight,
+          fontSize: 20,
+          fontWeight: FontWeight.w700,
+        ),
+        contentTextStyle: const TextStyle(
+          color: _textSecondaryLight,
+          fontSize: 15,
+        ),
       ),
 
       bottomSheetTheme: const BottomSheetThemeData(
         backgroundColor: _surfaceLight,
         elevation: 0,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
         clipBehavior: Clip.antiAlias,
       ),
 
-      dividerTheme: const DividerThemeData(color: _borderLight, thickness: 1, space: 1),
+      dividerTheme: const DividerThemeData(
+        color: _borderLight,
+        thickness: 1,
+        space: 1,
+      ),
 
       navigationBarTheme: NavigationBarThemeData(
         backgroundColor: _surfaceLight,
@@ -175,8 +278,12 @@ class AppTheme {
         labelTextStyle: WidgetStateProperty.resolveWith(
           (states) => TextStyle(
             fontSize: 11,
-            fontWeight: states.contains(WidgetState.selected) ? FontWeight.w600 : FontWeight.w400,
-            color: states.contains(WidgetState.selected) ? _primaryLight : _textSecondaryLight,
+            fontWeight: states.contains(WidgetState.selected)
+                ? FontWeight.w600
+                : FontWeight.w400,
+            color: states.contains(WidgetState.selected)
+                ? _primaryLight
+                : _textSecondaryLight,
           ),
         ),
       ),
@@ -188,7 +295,10 @@ class AppTheme {
         dividerColor: _borderLight,
         indicatorColor: _primaryLight,
         labelStyle: TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
-        unselectedLabelStyle: TextStyle(fontWeight: FontWeight.w500, fontSize: 14),
+        unselectedLabelStyle: TextStyle(
+          fontWeight: FontWeight.w500,
+          fontSize: 14,
+        ),
       ),
 
       floatingActionButtonTheme: FloatingActionButtonThemeData(
@@ -205,10 +315,15 @@ class AppTheme {
       ),
 
       switchTheme: SwitchThemeData(
-        thumbColor: WidgetStateProperty.resolveWith<Color?>((states) =>
-            states.contains(WidgetState.selected) ? _primaryLight : null),
-        trackColor: WidgetStateProperty.resolveWith<Color?>((states) =>
-            states.contains(WidgetState.selected) ? _primaryLight.withValues(alpha: 0.4) : null),
+        thumbColor: WidgetStateProperty.resolveWith<Color?>(
+          (states) =>
+              states.contains(WidgetState.selected) ? _primaryLight : null,
+        ),
+        trackColor: WidgetStateProperty.resolveWith<Color?>(
+          (states) => states.contains(WidgetState.selected)
+              ? _primaryLight.withValues(alpha: 0.4)
+              : null,
+        ),
       ),
     );
   }
@@ -217,21 +332,77 @@ class AppTheme {
   static ThemeData get darkTheme {
     final textTheme = GoogleFonts.interTextTheme(
       const TextTheme(
-        displayLarge: TextStyle(color: _textPrimaryDark, fontWeight: FontWeight.bold, letterSpacing: -1.0),
-        displayMedium: TextStyle(color: _textPrimaryDark, fontWeight: FontWeight.bold, letterSpacing: -0.8),
-        displaySmall: TextStyle(color: _textPrimaryDark, fontWeight: FontWeight.bold, letterSpacing: -0.5),
-        headlineLarge: TextStyle(color: _textPrimaryDark, fontWeight: FontWeight.bold, letterSpacing: -0.5),
-        headlineMedium: TextStyle(color: _textPrimaryDark, fontWeight: FontWeight.w600, letterSpacing: -0.2),
-        headlineSmall: TextStyle(color: _textPrimaryDark, fontWeight: FontWeight.w600, letterSpacing: -0.2),
-        titleLarge: TextStyle(color: _textPrimaryDark, fontWeight: FontWeight.w600, fontSize: 20),
-        titleMedium: TextStyle(color: _textPrimaryDark, fontWeight: FontWeight.w500, fontSize: 16),
-        titleSmall: TextStyle(color: _textPrimaryDark, fontWeight: FontWeight.w500, fontSize: 14),
-        bodyLarge: TextStyle(color: _textPrimaryDark, fontSize: 16, height: 1.5),
-        bodyMedium: TextStyle(color: _textSecondaryDark, fontSize: 14, height: 1.5),
+        displayLarge: TextStyle(
+          color: _textPrimaryDark,
+          fontWeight: FontWeight.bold,
+          letterSpacing: -1.0,
+        ),
+        displayMedium: TextStyle(
+          color: _textPrimaryDark,
+          fontWeight: FontWeight.bold,
+          letterSpacing: -0.8,
+        ),
+        displaySmall: TextStyle(
+          color: _textPrimaryDark,
+          fontWeight: FontWeight.bold,
+          letterSpacing: -0.5,
+        ),
+        headlineLarge: TextStyle(
+          color: _textPrimaryDark,
+          fontWeight: FontWeight.bold,
+          letterSpacing: -0.5,
+        ),
+        headlineMedium: TextStyle(
+          color: _textPrimaryDark,
+          fontWeight: FontWeight.w600,
+          letterSpacing: -0.2,
+        ),
+        headlineSmall: TextStyle(
+          color: _textPrimaryDark,
+          fontWeight: FontWeight.w600,
+          letterSpacing: -0.2,
+        ),
+        titleLarge: TextStyle(
+          color: _textPrimaryDark,
+          fontWeight: FontWeight.w600,
+          fontSize: 20,
+        ),
+        titleMedium: TextStyle(
+          color: _textPrimaryDark,
+          fontWeight: FontWeight.w500,
+          fontSize: 16,
+        ),
+        titleSmall: TextStyle(
+          color: _textPrimaryDark,
+          fontWeight: FontWeight.w500,
+          fontSize: 14,
+        ),
+        bodyLarge: TextStyle(
+          color: _textPrimaryDark,
+          fontSize: 16,
+          height: 1.5,
+        ),
+        bodyMedium: TextStyle(
+          color: _textSecondaryDark,
+          fontSize: 14,
+          height: 1.5,
+        ),
         bodySmall: TextStyle(color: _textMutedDark, fontSize: 12, height: 1.4),
-        labelLarge: TextStyle(color: _textPrimaryDark, fontWeight: FontWeight.w600, fontSize: 14),
-        labelMedium: TextStyle(color: _textSecondaryDark, fontWeight: FontWeight.w500, fontSize: 12),
-        labelSmall: TextStyle(color: _textMutedDark, fontWeight: FontWeight.w500, fontSize: 10),
+        labelLarge: TextStyle(
+          color: _textPrimaryDark,
+          fontWeight: FontWeight.w600,
+          fontSize: 14,
+        ),
+        labelMedium: TextStyle(
+          color: _textSecondaryDark,
+          fontWeight: FontWeight.w500,
+          fontSize: 12,
+        ),
+        labelSmall: TextStyle(
+          color: _textMutedDark,
+          fontWeight: FontWeight.w500,
+          fontSize: 10,
+        ),
       ),
     );
 
@@ -269,7 +440,10 @@ class AppTheme {
         scrolledUnderElevation: 0,
         centerTitle: false,
         iconTheme: const IconThemeData(color: _textPrimaryDark, size: 24),
-        actionsIconTheme: const IconThemeData(color: _textPrimaryDark, size: 24),
+        actionsIconTheme: const IconThemeData(
+          color: _textPrimaryDark,
+          size: 24,
+        ),
         surfaceTintColor: Colors.transparent,
       ),
 
@@ -287,12 +461,30 @@ class AppTheme {
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
         fillColor: _surfaceVariantDark,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: _borderDark, width: 1.5)),
-        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: _borderDark, width: 1.5)),
-        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: _primaryDark, width: 2)),
-        errorBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFF87171), width: 1.5)),
-        focusedErrorBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFF87171), width: 2)),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 16,
+        ),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: _borderDark, width: 1.5),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: _borderDark, width: 1.5),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: _primaryDark, width: 2),
+        ),
+        errorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: Color(0xFFF87171), width: 1.5),
+        ),
+        focusedErrorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: Color(0xFFF87171), width: 2),
+        ),
         labelStyle: const TextStyle(color: _textSecondaryDark, fontSize: 14),
         hintStyle: const TextStyle(color: _textMutedDark, fontSize: 14),
         prefixIconColor: _textSecondaryDark,
@@ -306,8 +498,14 @@ class AppTheme {
           elevation: 0,
           shadowColor: Colors.transparent,
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          textStyle: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600, letterSpacing: 0.2),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          textStyle: const TextStyle(
+            fontSize: 15,
+            fontWeight: FontWeight.w600,
+            letterSpacing: 0.2,
+          ),
         ),
       ),
 
@@ -316,8 +514,14 @@ class AppTheme {
           foregroundColor: _primaryDark,
           side: const BorderSide(color: _borderDark, width: 1.5),
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          textStyle: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600, letterSpacing: 0.2),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          textStyle: const TextStyle(
+            fontSize: 15,
+            fontWeight: FontWeight.w600,
+            letterSpacing: 0.2,
+          ),
         ),
       ),
 
@@ -325,14 +529,19 @@ class AppTheme {
         style: TextButton.styleFrom(
           foregroundColor: _primaryDark,
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
+          ),
           textStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
         ),
       ),
 
       checkboxTheme: CheckboxThemeData(
-        fillColor: WidgetStateProperty.resolveWith<Color?>((states) =>
-            states.contains(WidgetState.selected) ? _primaryDark : _surfaceVariantDark),
+        fillColor: WidgetStateProperty.resolveWith<Color?>(
+          (states) => states.contains(WidgetState.selected)
+              ? _primaryDark
+              : _surfaceVariantDark,
+        ),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
         side: const BorderSide(color: Color(0xFF475569), width: 1.5),
       ),
@@ -341,18 +550,31 @@ class AppTheme {
         backgroundColor: _surfaceDark,
         elevation: 0,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        titleTextStyle: const TextStyle(color: _textPrimaryDark, fontSize: 20, fontWeight: FontWeight.w700),
-        contentTextStyle: const TextStyle(color: _textSecondaryDark, fontSize: 15),
+        titleTextStyle: const TextStyle(
+          color: _textPrimaryDark,
+          fontSize: 20,
+          fontWeight: FontWeight.w700,
+        ),
+        contentTextStyle: const TextStyle(
+          color: _textSecondaryDark,
+          fontSize: 15,
+        ),
       ),
 
       bottomSheetTheme: const BottomSheetThemeData(
         backgroundColor: _surfaceDark,
         elevation: 0,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
         clipBehavior: Clip.antiAlias,
       ),
 
-      dividerTheme: const DividerThemeData(color: _borderDark, thickness: 1, space: 1),
+      dividerTheme: const DividerThemeData(
+        color: _borderDark,
+        thickness: 1,
+        space: 1,
+      ),
 
       navigationBarTheme: NavigationBarThemeData(
         backgroundColor: _surfaceDark,
@@ -360,8 +582,12 @@ class AppTheme {
         labelTextStyle: WidgetStateProperty.resolveWith(
           (states) => TextStyle(
             fontSize: 11,
-            fontWeight: states.contains(WidgetState.selected) ? FontWeight.w600 : FontWeight.w400,
-            color: states.contains(WidgetState.selected) ? _primaryDark : _textSecondaryDark,
+            fontWeight: states.contains(WidgetState.selected)
+                ? FontWeight.w600
+                : FontWeight.w400,
+            color: states.contains(WidgetState.selected)
+                ? _primaryDark
+                : _textSecondaryDark,
           ),
         ),
       ),
@@ -373,7 +599,10 @@ class AppTheme {
         dividerColor: _borderDark,
         indicatorColor: _primaryDark,
         labelStyle: TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
-        unselectedLabelStyle: TextStyle(fontWeight: FontWeight.w500, fontSize: 14),
+        unselectedLabelStyle: TextStyle(
+          fontWeight: FontWeight.w500,
+          fontSize: 14,
+        ),
       ),
 
       floatingActionButtonTheme: FloatingActionButtonThemeData(
@@ -390,10 +619,16 @@ class AppTheme {
       ),
 
       switchTheme: SwitchThemeData(
-        thumbColor: WidgetStateProperty.resolveWith<Color?>((states) =>
-            states.contains(WidgetState.selected) ? _primaryDark : _textMutedDark),
-        trackColor: WidgetStateProperty.resolveWith<Color?>((states) =>
-            states.contains(WidgetState.selected) ? _primaryDark.withValues(alpha: 0.4) : _surfaceVariantDark),
+        thumbColor: WidgetStateProperty.resolveWith<Color?>(
+          (states) => states.contains(WidgetState.selected)
+              ? _primaryDark
+              : _textMutedDark,
+        ),
+        trackColor: WidgetStateProperty.resolveWith<Color?>(
+          (states) => states.contains(WidgetState.selected)
+              ? _primaryDark.withValues(alpha: 0.4)
+              : _surfaceVariantDark,
+        ),
       ),
     );
   }

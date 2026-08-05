@@ -222,7 +222,8 @@ class _AdminDashboardState extends State<AdminDashboard> {
                 ),
               ),
             ),
-          if (_selectedYear != null && (!_selectedYear!.isCurrent || _selectedYear!.isArchived))
+          if (_selectedYear != null &&
+              (!_selectedYear!.isCurrent || _selectedYear!.isArchived))
             Padding(
               padding: const EdgeInsets.only(right: 8.0),
               child: Container(
@@ -235,11 +236,21 @@ class _AdminDashboardState extends State<AdminDashboard> {
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(Icons.lock_outline, size: 14, color: Colors.amber.shade800),
+                    Icon(
+                      Icons.lock_outline,
+                      size: 14,
+                      color: Colors.amber.shade800,
+                    ),
                     const SizedBox(width: 4),
                     Text(
-                      _selectedYear!.isArchived ? 'Archived (Read-Only)' : 'Past Session (Read-Only)',
-                      style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.amber.shade900),
+                      _selectedYear!.isArchived
+                          ? 'Archived (Read-Only)'
+                          : 'Past Session (Read-Only)',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.amber.shade900,
+                      ),
                     ),
                   ],
                 ),
@@ -2081,7 +2092,9 @@ class _StudentsTabState extends State<_StudentsTab> {
                       onTap: isSubmitting
                           ? null
                           : () async {
-                              final current = DateTime.tryParse(dobCtrl.text) ?? DateTime(2012, 1, 1);
+                              final current =
+                                  DateTime.tryParse(dobCtrl.text) ??
+                                  DateTime(2012, 1, 1);
                               final picked = await showDatePicker(
                                 context: ctx,
                                 initialDate: current,
@@ -2089,7 +2102,8 @@ class _StudentsTabState extends State<_StudentsTab> {
                                 lastDate: DateTime.now(),
                               );
                               if (picked != null) {
-                                dobCtrl.text = "${picked.year}-${picked.month.toString().padLeft(2, '0')}-${picked.day.toString().padLeft(2, '0')}";
+                                dobCtrl.text =
+                                    "${picked.year}-${picked.month.toString().padLeft(2, '0')}-${picked.day.toString().padLeft(2, '0')}";
                               }
                             },
                       child: IgnorePointer(
@@ -2317,7 +2331,9 @@ class _StudentsTabState extends State<_StudentsTab> {
                     onTap: isSubmitting
                         ? null
                         : () async {
-                            final current = DateTime.tryParse(dobCtrl.text) ?? DateTime(2012, 1, 1);
+                            final current =
+                                DateTime.tryParse(dobCtrl.text) ??
+                                DateTime(2012, 1, 1);
                             final picked = await showDatePicker(
                               context: ctx,
                               initialDate: current,
@@ -2325,7 +2341,8 @@ class _StudentsTabState extends State<_StudentsTab> {
                               lastDate: DateTime.now(),
                             );
                             if (picked != null) {
-                              dobCtrl.text = "${picked.year}-${picked.month.toString().padLeft(2, '0')}-${picked.day.toString().padLeft(2, '0')}";
+                              dobCtrl.text =
+                                  "${picked.year}-${picked.month.toString().padLeft(2, '0')}-${picked.day.toString().padLeft(2, '0')}";
                             }
                           },
                     child: IgnorePointer(
