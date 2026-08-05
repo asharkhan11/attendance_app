@@ -901,7 +901,6 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
                 },
               ),
               const SizedBox(width: 8),
-
               // 4. Session Status Chip (Height 40px)
               Container(
                 height: 40,

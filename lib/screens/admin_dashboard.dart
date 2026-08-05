@@ -222,6 +222,29 @@ class _AdminDashboardState extends State<AdminDashboard> {
                 ),
               ),
             ),
+          if (_selectedYear != null && (!_selectedYear!.isCurrent || _selectedYear!.isArchived))
+            Padding(
+              padding: const EdgeInsets.only(right: 8.0),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.amber.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(4),
+                  border: Border.all(color: Colors.amber.shade700, width: 0.8),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.lock_outline, size: 14, color: Colors.amber.shade800),
+                    const SizedBox(width: 4),
+                    Text(
+                      _selectedYear!.isArchived ? 'Archived (Read-Only)' : 'Past Session (Read-Only)',
+                      style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.amber.shade900),
+                    ),
+                  ],
+                ),
+              ),
+            ),
           IconButton(
             icon: const Icon(Icons.person_outline),
             tooltip: 'My Profile & Security',
@@ -294,7 +317,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                       ],
                     ),
                   ),
-                Expanded(child: tabs[_selectedIndex.clamp(0, tabs.length - 1)]),
+                Expanded(child: tabs[_selectedIndex]),
               ],
             ),
     );
@@ -310,6 +333,532 @@ class _AdminDashboardState extends State<AdminDashboard> {
           ProfileModal.show(context, onProfileUpdated: _loadSharedData),
       onLogoutTap: () =>
           Provider.of<AuthProvider>(context, listen: false).logout(),
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// TAB 1: Analytics
+// ═══════════════════════════════════════════════════════════════════════════════
+
+class _AnalyticsTab extends StatefulWidget {
+  final ApiService api;
+  final List<SchoolClass> classes;
+  final AcademicYear? selectedYear;
+  final void Function(String, {bool error}) snack;
+  const _AnalyticsTab({
+    required this.api,
+    required this.classes,
+    required this.selectedYear,
+    required this.snack,
+  });
+
+  @override
+  State<_AnalyticsTab> createState() => _AnalyticsTabState();
+}
+
+class _AnalyticsTabState extends State<_AnalyticsTab>
+    with AutomaticKeepAliveClientMixin {
+  @override
+  bool get wantKeepAlive => true;
+
+  SchoolClass? _selectedClass; // null = All Classes (School-Wide)
+  String _datePreset = 'month'; // 'week', 'month', '90days', 'all'
+  double _threshold = 75;
+  bool _loading = false;
+
+  Map<String, dynamic>? _overviewData;
+  List<dynamic> _trendData = [];
+  List<dynamic> _defaultersData = [];
+  DateTimeRange? _customDateRange;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadAllAnalytics();
+  }
+
+  @override
+  void didUpdateWidget(covariant _AnalyticsTab oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.selectedYear?.id != widget.selectedYear?.id) {
+      _loadAllAnalytics();
+    }
+  }
+
+  (String, String) _getDateRange() {
+    final now = DateTime.now();
+    DateTime toDt = now;
+
+    if (widget.selectedYear != null) {
+      final eDate = widget.selectedYear!.endDate.split('T')[0];
+      final parsedEnd = DateTime.tryParse(eDate);
+      if (parsedEnd != null && parsedEnd.isBefore(now)) {
+        toDt = parsedEnd;
+      }
+    }
+
+    DateTime fromDt;
+    switch (_datePreset) {
+      case 'week':
+        fromDt = toDt.subtract(const Duration(days: 7));
+        break;
+      case '90days':
+        fromDt = toDt.subtract(const Duration(days: 90));
+        break;
+      case 'all':
+        if (widget.selectedYear != null) {
+          final sDate = widget.selectedYear!.startDate.split('T')[0];
+          fromDt = DateTime.tryParse(sDate) ?? DateTime(2025, 1, 1);
+        } else {
+          fromDt = DateTime(2025, 1, 1);
+        }
+        break;
+      case 'custom':
+        if (_customDateRange != null) {
+          fromDt = _customDateRange!.start;
+          toDt = _customDateRange!.end;
+        } else {
+          fromDt = toDt.subtract(const Duration(days: 30));
+        }
+        break;
+      case 'month':
+      default:
+        fromDt = DateTime(toDt.year, toDt.month, 1);
+        break;
+    }
+    final from =
+        "${fromDt.year}-${fromDt.month.toString().padLeft(2, '0')}-${fromDt.day.toString().padLeft(2, '0')}";
+    final to =
+        "${toDt.year}-${toDt.month.toString().padLeft(2, '0')}-${toDt.day.toString().padLeft(2, '0')}";
+    return (from, to);
+  }
+
+  Future<void> _loadAllAnalytics() async {
+    setState(() => _loading = true);
+    try {
+      final (from, to) = _getDateRange();
+      final ayId = widget.selectedYear?.id;
+
+      final ovRes = await widget.api.getSchoolOverview(
+        academicYearId: ayId,
+        classId: _selectedClass?.id,
+        from: from,
+        to: to,
+        threshold: _threshold,
+      );
+      if (ovRes is Map && ovRes['data'] != null) {
+        _overviewData = Map<String, dynamic>.from(ovRes['data'] as Map);
+      } else if (ovRes is Map) {
+        _overviewData = Map<String, dynamic>.from(ovRes);
+      }
+
+      if (_selectedClass != null) {
+        try {
+          final clsSum = await widget.api.getClassSummary(
+            _selectedClass!.id,
+            from: from,
+            to: to,
+          );
+          final summaryMap = (clsSum is Map && clsSum['data'] != null)
+              ? clsSum['data'] as Map<String, dynamic>
+              : (clsSum is Map ? clsSum as Map<String, dynamic> : null);
+          if (summaryMap != null) {
+            _overviewData = {
+              ...?_overviewData,
+              'overall_attendance_pct':
+                  summaryMap['attendance_percentage'] ??
+                  summaryMap['overall_attendance_pct'] ??
+                  _overviewData?['overall_attendance_pct'],
+              'total_students':
+                  summaryMap['total_students'] ??
+                  _overviewData?['total_students'],
+              'total_sessions':
+                  summaryMap['total_sessions'] ??
+                  _overviewData?['total_sessions'],
+              'total_defaulters':
+                  summaryMap['defaulters_count'] ??
+                  summaryMap['total_defaulters'] ??
+                  _overviewData?['total_defaulters'],
+            };
+          }
+        } catch (_) {}
+      }
+
+      final defRes = await widget.api.getSchoolDefaulters(
+        classId: _selectedClass?.id,
+        from: from,
+        to: to,
+        threshold: _threshold,
+      );
+      if (defRes is Map && defRes['data'] is List) {
+        _defaultersData = defRes['data'] as List;
+      } else if (defRes is List) {
+        _defaultersData = defRes;
+      } else {
+        _defaultersData = [];
+      }
+
+      final trRes = _selectedClass == null
+          ? await widget.api.getSchoolTrend(
+              from: from,
+              to: to,
+              granularity: 'week',
+            )
+          : await widget.api.getClassTrend(
+              _selectedClass!.id,
+              from: from,
+              to: to,
+              granularity: 'week',
+            );
+
+      if (trRes is Map &&
+          trRes['data'] is Map &&
+          trRes['data']['trend'] is List) {
+        _trendData = trRes['data']['trend'] as List;
+      } else if (trRes is Map && trRes['trend'] is List) {
+        _trendData = trRes['trend'] as List;
+      } else if (trRes is Map && trRes['data'] is List) {
+        _trendData = trRes['data'] as List;
+      } else if (trRes is List) {
+        _trendData = trRes;
+      } else {
+        _trendData = [];
+      }
+    } catch (e) {
+      widget.snack('Error loading analytics: $e');
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    super.build(context);
+    if (widget.selectedYear == null) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.analytics_outlined,
+              size: 64,
+              color: Colors.orange.shade400,
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'No Academic Session Selected',
+              style: Theme.of(
+                context,
+              ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'Please select an Academic Session to view analytics.',
+              style: TextStyle(color: Colors.grey),
+            ),
+          ],
+        ),
+      );
+    }
+
+    num? findNum(List<String> keys) {
+      for (final k in keys) {
+        final val = _overviewData?[k];
+        if (val is num) return val;
+      }
+      return null;
+    }
+
+    double overallPct =
+        (findNum([
+                  'overall_attendance_pct',
+                  'attendance_percentage',
+                  'overall_attendance_percentage',
+                  'attendance_rate',
+                  'average_attendance',
+                ]) ??
+                0.0)
+            .toDouble();
+    int totalStudents =
+        (findNum([
+                  'total_students',
+                  'enrolled_students',
+                  'student_count',
+                  'students_count',
+                ]) ??
+                0)
+            .toInt();
+    int totalSessions =
+        (findNum([
+                  'total_sessions',
+                  'sessions_conducted',
+                  'session_count',
+                  'sessions_count',
+                ]) ??
+                0)
+            .toInt();
+    int totalDefaulters =
+        (findNum(['total_defaulters', 'defaulters_count', 'defaulter_count']) ??
+                0)
+            .toInt();
+    final rawComparisons = (_overviewData?['class_comparisons'] as List?) ?? [];
+
+    final classComparisons = _selectedClass == null
+        ? rawComparisons
+        : rawComparisons.where((c) {
+            final cId = c['class_id']?.toString();
+            final cName = c['class_name']?.toString() ?? '';
+            return (cId != null && cId == _selectedClass!.id) ||
+                cName.contains(_selectedClass!.displayName);
+          }).toList();
+
+    final barComparisons = classComparisons.isNotEmpty
+        ? classComparisons
+        : (_selectedClass != null
+              ? [
+                  {
+                    'class_name': _selectedClass!.displayName,
+                    'attendance_percentage': overallPct,
+                  },
+                ]
+              : []);
+
+    if (rawComparisons.isNotEmpty && _selectedClass == null) {
+      if (overallPct == 0.0) {
+        final pcts = rawComparisons
+            .map((c) => (c['attendance_percentage'] as num?)?.toDouble() ?? 0.0)
+            .where((p) => p > 0)
+            .toList();
+        if (pcts.isNotEmpty) {
+          overallPct = pcts.reduce((a, b) => a + b) / pcts.length;
+        }
+      }
+      if (totalStudents == 0) {
+        totalStudents = rawComparisons.fold<int>(
+          0,
+          (sum, c) => sum + ((c['total_students'] as num?)?.toInt() ?? 0),
+        );
+      }
+    }
+
+    if (totalDefaulters == 0 && _defaultersData.isNotEmpty) {
+      totalDefaulters = _defaultersData.length;
+    }
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header Controls
+          Card(
+            margin: EdgeInsets.zero,
+            child: Padding(
+              padding: const EdgeInsets.all(14),
+              child: Wrap(
+                spacing: 12,
+                runSpacing: 12,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  if (context.isMobile)
+                    OutlinedButton.icon(
+                      icon: const Icon(Icons.filter_list),
+                      label: const Text('Analytics Filters'),
+                      onPressed: () => AnalyticsFilterSheet.show(
+                        context,
+                        classes: widget.classes,
+                        selectedClass: _selectedClass,
+                        threshold: _threshold,
+                        onClassChanged: (c) {
+                          setState(() => _selectedClass = c);
+                          _loadAllAnalytics();
+                        },
+                        onThresholdChanged: (t) {
+                          setState(() => _threshold = t);
+                          _loadAllAnalytics();
+                        },
+                      ),
+                    )
+                  else ...[
+                    SizedBox(
+                      width: 220,
+                      child: SearchableDropdown<SchoolClass?>(
+                        value: _selectedClass,
+                        labelText: 'Class Scope',
+                        isDense: true,
+                        items: [null, ...widget.classes],
+                        itemAsString: (c) => c == null
+                            ? '🏫 All Classes (School-Wide)'
+                            : c.displayName,
+                        onChanged: (v) {
+                          setState(() => _selectedClass = v);
+                          _loadAllAnalytics();
+                        },
+                      ),
+                    ),
+                  ],
+
+                  DropdownButton<String>(
+                    value: _datePreset,
+                    isDense: true,
+                    underline: const SizedBox(),
+                    items: [
+                      const DropdownMenuItem(
+                        value: 'week',
+                        child: Text('Last 7 Days'),
+                      ),
+                      const DropdownMenuItem(
+                        value: 'month',
+                        child: Text('This Month'),
+                      ),
+                      const DropdownMenuItem(
+                        value: '90days',
+                        child: Text('Last 90 Days'),
+                      ),
+                      const DropdownMenuItem(
+                        value: 'all',
+                        child: Text('All Time'),
+                      ),
+                      DropdownMenuItem(
+                        value: 'custom',
+                        child: Text(
+                          _customDateRange != null
+                              ? '📅 ${_customDateRange!.start.month}/${_customDateRange!.start.day} - ${_customDateRange!.end.month}/${_customDateRange!.end.day}'
+                              : '📅 Custom Range...',
+                        ),
+                      ),
+                    ],
+                    onChanged: (v) async {
+                      if (v != null) {
+                        if (v == 'custom') {
+                          final now = DateTime.now();
+                          final picked = await showDateRangePicker(
+                            context: context,
+                            initialEntryMode: DatePickerEntryMode.inputOnly,
+                            initialDateRange:
+                                _customDateRange ??
+                                DateTimeRange(
+                                  start: now.subtract(const Duration(days: 30)),
+                                  end: now,
+                                ),
+                            firstDate: DateTime(2020),
+                            lastDate: DateTime(2035),
+                            builder: (context, child) {
+                              return Theme(
+                                data: Theme.of(context).copyWith(
+                                  colorScheme: ColorScheme.light(
+                                    primary: Theme.of(context).primaryColor,
+                                  ),
+                                ),
+                                child: child!,
+                              );
+                            },
+                          );
+                          if (picked != null) {
+                            setState(() {
+                              _customDateRange = picked;
+                              _datePreset = 'custom';
+                            });
+                            _loadAllAnalytics();
+                          }
+                        } else {
+                          setState(() => _datePreset = v);
+                          _loadAllAnalytics();
+                        }
+                      }
+                    },
+                  ),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Text(
+                        'Defaulter Cutoff:',
+                        style: TextStyle(fontSize: 13),
+                      ),
+                      const SizedBox(width: 6),
+                      SizedBox(
+                        width: 70,
+                        child: TextFormField(
+                          initialValue: _threshold.toStringAsFixed(0),
+                          decoration: const InputDecoration(
+                            suffixText: '%',
+                            border: OutlineInputBorder(),
+                            isDense: true,
+                            contentPadding: EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 6,
+                            ),
+                          ),
+                          keyboardType: TextInputType.number,
+                          onChanged: (v) {
+                            _threshold = double.tryParse(v) ?? 75;
+                          },
+                          onFieldSubmitted: (v) {
+                            _threshold = double.tryParse(v) ?? 75;
+                            _loadAllAnalytics();
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.refresh),
+                    tooltip: 'Refresh Data',
+                    onPressed: _loadAllAnalytics,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _kpiCard(
+    String title,
+    String value,
+    IconData icon,
+    Color color,
+    bool isWide,
+  ) {
+    return SizedBox(
+      width: isWide ? 220 : 160,
+      child: Card(
+        elevation: 2,
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    title,
+                    style: TextStyle(
+                      color: Colors.grey.shade700,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  Icon(icon, color: color, size: 20),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Text(
+                value,
+                style: TextStyle(
+                  color: color,
+                  fontSize: 22,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
