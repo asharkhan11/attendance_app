@@ -410,4 +410,15 @@ class AppTheme {
   static const Color borderFocused = _primaryLight;
   static const Color error = _error;
   static const Color success = _success;
+      // Floating Action Button Theme
+      floatingActionButtonTheme: FloatingActionButtonThemeData(
+        backgroundColor: primary,
+        foregroundColor: Colors.white,
+        elevation: 2,
+        // shadowColor: primary.withValues(alpha: 0.2),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      ),
+    );
+  }
+>>>>>>> main
 }
