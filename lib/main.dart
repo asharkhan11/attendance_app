@@ -6,6 +6,7 @@ import 'screens/login_screen.dart';
 import 'screens/admin_dashboard.dart';
 import 'screens/teacher_dashboard.dart';
 import 'utils/app_logger.dart';
+import 'utils/app_theme.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -52,14 +53,7 @@ class AttendanceApp extends StatelessWidget {
       child: MaterialApp(
         title: 'Attendance System',
         debugShowCheckedModeBanner: false,
-        theme: ThemeData(
-          useMaterial3: true,
-          colorScheme: ColorScheme.fromSeed(
-            seedColor: const Color(0xFF1E88E5),
-            brightness: Brightness.light,
-          ),
-          fontFamily: 'Roboto',
-        ),
+        theme: AppTheme.lightTheme,
         home: const AuthGate(),
       ),
     );

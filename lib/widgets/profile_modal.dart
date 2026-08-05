@@ -9,10 +9,29 @@ class ProfileModal extends StatefulWidget {
   const ProfileModal({super.key, this.onProfileUpdated});
 
   static void show(BuildContext context, {VoidCallback? onProfileUpdated}) {
-    showDialog(
-      context: context,
-      builder: (_) => ProfileModal(onProfileUpdated: onProfileUpdated),
-    );
+    if (MediaQuery.of(context).size.width < 600) {
+      showModalBottomSheet(
+        context: context,
+        isScrollControlled: true,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        builder: (_) => Padding(
+          padding: EdgeInsets.only(
+            bottom: MediaQuery.of(context).viewInsets.bottom,
+          ),
+          child: SizedBox(
+            height: MediaQuery.of(context).size.height * 0.75,
+            child: ProfileModal(onProfileUpdated: onProfileUpdated),
+          ),
+        ),
+      );
+    } else {
+      showDialog(
+        context: context,
+        builder: (_) => ProfileModal(onProfileUpdated: onProfileUpdated),
+      );
+    }
   }
 
   @override

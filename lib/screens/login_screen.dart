@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../design_system/app_breakpoints.dart';
+import '../design_system/app_spacing.dart';
+import '../features/auth/presentation/widgets/login_form.dart';
+import '../features/auth/presentation/widgets/login_header.dart';
 import '../providers/auth_provider.dart';
 import '../utils/app_logger.dart';
 
@@ -16,7 +20,6 @@ class _LoginScreenState extends State<LoginScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
 
-  bool _obscurePassword = true;
   bool _rememberCredentials = true;
   bool _isLoadingSavedCredentials = true;
 
@@ -76,7 +79,7 @@ class _LoginScreenState extends State<LoginScreen> {
           content: Row(
             children: [
               const Icon(Icons.warning_amber_rounded, color: Colors.white),
-              const SizedBox(width: 12),
+              const SizedBox(width: AppSpacing.sm),
               Expanded(child: Text(authProvider.errorMessage!)),
             ],
           ),
@@ -91,193 +94,46 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     final authProvider = Provider.of<AuthProvider>(context);
+    final isMobile = context.isMobile;
 
     return Scaffold(
-      body: Center(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24.0),
-          child: Container(
-            constraints: const BoxConstraints(maxWidth: 420),
-            child: Card(
-              elevation: 4,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-              child: Padding(
-                padding: const EdgeInsets.all(32.0),
-                child: _isLoadingSavedCredentials
-                    ? const SizedBox(
-                        height: 200,
-                        child: Center(child: CircularProgressIndicator()),
-                      )
-                    : Form(
-                        key: _formKey,
-                        autovalidateMode: AutovalidateMode.onUserInteraction,
-                        child: Column(
+      body: SafeArea(
+        child: Center(
+          child: SingleChildScrollView(
+            padding: EdgeInsets.all(isMobile ? AppSpacing.md : AppSpacing.xl),
+            child: Container(
+              constraints: const BoxConstraints(maxWidth: 420),
+              child: Card(
+                elevation: 4,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                child: Padding(
+                  padding: EdgeInsets.all(isMobile ? AppSpacing.md : AppSpacing.lg),
+                  child: _isLoadingSavedCredentials
+                      ? const SizedBox(
+                          height: 200,
+                          child: Center(child: CircularProgressIndicator()),
+                        )
+                      : Column(
                           mainAxisSize: MainAxisSize.min,
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
-                            Icon(Icons.school, size: 64, color: Theme.of(context).primaryColor),
-                            const SizedBox(height: 16),
-                            Text(
-                              'Attendance System',
-                              textAlign: TextAlign.center,
-                              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                            ),
-                            const SizedBox(height: 8),
-                            Text(
-                              'Login as Admin or Teacher',
-                              textAlign: TextAlign.center,
-                              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                    color: Colors.grey[600],
-                                  ),
-                            ),
-                            const SizedBox(height: 24),
-                            if (authProvider.errorMessage != null) ...[
-                              Container(
-                                padding: const EdgeInsets.all(12),
-                                margin: const EdgeInsets.only(bottom: 16),
-                                decoration: BoxDecoration(
-                                  color: Colors.red.shade50,
-                                  borderRadius: BorderRadius.circular(8),
-                                  border: Border.all(color: Colors.red.shade200),
-                                ),
-                                child: Row(
-                                  children: [
-                                    Icon(Icons.error_outline, color: Colors.red.shade700, size: 20),
-                                    const SizedBox(width: 10),
-                                    Expanded(
-                                      child: Text(
-                                        authProvider.errorMessage!,
-                                        style: TextStyle(
-                                          color: Colors.red.shade900,
-                                          fontSize: 13,
-                                          fontWeight: FontWeight.w500,
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ],
-                            TextFormField(
-                              controller: _schoolCodeController,
-                              decoration: const InputDecoration(
-                                labelText: 'School Code',
-                                hintText: 'e.g. demo-school',
-                                prefixIcon: Icon(Icons.business),
-                                border: OutlineInputBorder(),
-                              ),
-                              validator: (v) {
-                                final val = v?.trim() ?? '';
-                                if (val.isEmpty) return 'Please enter your school code';
-                                if (val.length < 2) return 'School code must be at least 2 characters';
-                                final validRegExp = RegExp(r'^[a-zA-Z0-9_-]+$');
-                                if (!validRegExp.hasMatch(val)) {
-                                  return 'Use letters, numbers, hyphens or underscores';
-                                }
-                                return null;
+                            const LoginHeader(),
+                            const SizedBox(height: AppSpacing.lg),
+                            LoginForm(
+                              formKey: _formKey,
+                              schoolCodeController: _schoolCodeController,
+                              emailController: _emailController,
+                              passwordController: _passwordController,
+                              rememberCredentials: _rememberCredentials,
+                              onRememberChanged: (val) {
+                                setState(() => _rememberCredentials = val);
                               },
-                            ),
-                            const SizedBox(height: 16),
-                            TextFormField(
-                              controller: _emailController,
-                              keyboardType: TextInputType.emailAddress,
-                              decoration: const InputDecoration(
-                                labelText: 'Email Address',
-                                hintText: 'e.g. admin@school.edu',
-                                prefixIcon: Icon(Icons.email),
-                                border: OutlineInputBorder(),
-                              ),
-                              validator: (v) {
-                                final val = v?.trim() ?? '';
-                                if (val.isEmpty) return 'Please enter your email address';
-                                final emailRegExp = RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$');
-                                if (!emailRegExp.hasMatch(val)) {
-                                  return 'Please enter a valid email address';
-                                }
-                                return null;
-                              },
-                            ),
-                            const SizedBox(height: 16),
-                            TextFormField(
-                              controller: _passwordController,
-                              obscureText: _obscurePassword,
-                              decoration: InputDecoration(
-                                labelText: 'Password',
-                                prefixIcon: const Icon(Icons.lock),
-                                suffixIcon: IconButton(
-                                  icon: Icon(
-                                    _obscurePassword ? Icons.visibility_off : Icons.visibility,
-                                  ),
-                                  onPressed: () {
-                                    setState(() {
-                                      _obscurePassword = !_obscurePassword;
-                                    });
-                                  },
-                                ),
-                                border: const OutlineInputBorder(),
-                              ),
-                              validator: (v) {
-                                if (v == null || v.isEmpty) return 'Please enter your password';
-                                if (v.length < 4) return 'Password must be at least 4 characters';
-                                return null;
-                              },
-                            ),
-                            const SizedBox(height: 8),
-                            InkWell(
-                              onTap: () {
-                                setState(() {
-                                  _rememberCredentials = !_rememberCredentials;
-                                });
-                              },
-                              borderRadius: BorderRadius.circular(4),
-                              child: Padding(
-                                padding: const EdgeInsets.symmetric(vertical: 4.0),
-                                child: Row(
-                                  children: [
-                                    Checkbox(
-                                      value: _rememberCredentials,
-                                      onChanged: (val) {
-                                        setState(() {
-                                          _rememberCredentials = val ?? true;
-                                        });
-                                      },
-                                    ),
-                                    Text(
-                                      'Remember School Code & Email',
-                                      style: TextStyle(
-                                        fontSize: 13,
-                                        color: Colors.grey.shade800,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                            const SizedBox(height: 16),
-                            ElevatedButton(
-                              onPressed: authProvider.isLoading ? null : _submit,
-                              style: ElevatedButton.styleFrom(
-                                padding: const EdgeInsets.symmetric(vertical: 16),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                              ),
-                              child: authProvider.isLoading
-                                  ? const SizedBox(
-                                      height: 20,
-                                      width: 20,
-                                      child: CircularProgressIndicator(strokeWidth: 2),
-                                    )
-                                  : const Text(
-                                      'LOG IN',
-                                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                                    ),
+                              isLoading: authProvider.isLoading,
+                              errorMessage: authProvider.errorMessage,
+                              onSubmit: _submit,
                             ),
                           ],
                         ),
-                      ),
+                ),
               ),
             ),
           ),
@@ -286,3 +142,4 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 }
+
