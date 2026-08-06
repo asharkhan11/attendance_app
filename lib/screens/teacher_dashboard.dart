@@ -401,7 +401,7 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
         setState(() {
           _sessionDiagnosticError =
               'Server Connection Error (500 / Exception): ${e.toString().replaceAll('Exception: ', '')}\n\n'
-              'Check backend server status at http://localhost:8081 and ensure an Academic Session is active in Admin Dashboard.';
+              'Check backend server status at ${ApiService.baseUrl} and ensure an Academic Session is active in Admin Dashboard.';
         });
       }
     } finally {

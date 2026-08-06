@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
+import '../config/env_config.dart';
 import '../utils/app_logger.dart';
 
 class ApiException implements Exception {
@@ -46,20 +47,9 @@ class DownloadedFile {
 }
 
 class ApiService {
-  // Web/desktop: localhost. Android emulator: the host machine's loopback.
-  static String get baseUrl {
-    const configuredUrl = String.fromEnvironment('API_BASE_URL');
-    if (configuredUrl.isNotEmpty) {
-      return configuredUrl.endsWith('/')
-          ? configuredUrl.substring(0, configuredUrl.length - 1)
-          : configuredUrl;
-    }
-    if (kIsWeb) return 'http://localhost:8081';
-    if (defaultTargetPlatform == TargetPlatform.android) {
-      return 'http://10.0.2.2:8081';
-    }
-    return 'http://localhost:8081';
-  }
+  /// Base API URL dynamically resolved from environment configuration
+  static String get baseUrl => EnvConfig.apiBaseUrl;
+
 
   final FlutterSecureStorage _storage;
 

@@ -1,0 +1,26 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Attendance App (Default Env)",
+      "request": "launch",
+      "type": "dart"
+    },
+    {
+      "name": "Attendance App (With .env file)",
+      "request": "launch",
+      "type": "dart",
+      "args": [
+        "--dart-define-from-file=.env"
+      ]
+    },
+    {
+      "name": "Attendance App (With --dart-define)",
+      "request": "launch",
+      "type": "dart",
+      "args": [
+        "--dart-define=API_BASE_URL=https://api-attendance.mooble.win"
+      ]
+    }
+  ]
+}

@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart' hide ChangeNotifierProvider, Provider;
 import 'package:provider/provider.dart';
+import 'config/env_config.dart';
 import 'providers/auth_provider.dart';
 import 'providers/app_providers.dart';
 import 'screens/login_screen.dart';
@@ -10,8 +11,10 @@ import 'screens/teacher_dashboard.dart';
 import 'utils/app_logger.dart';
 import 'utils/app_theme.dart';
 
-void main() {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await EnvConfig.init();
+
 
   FlutterError.onError = (FlutterErrorDetails details) {
     FlutterError.presentError(details);
