@@ -22,6 +22,62 @@ class StudentProfileScreen extends StatelessWidget {
     required this.totalExcused,
   });
 
+  /// Opens the student details overlay as a Modal Bottom Sheet on mobile screens
+  /// and as a centered Modal Dialog on desktop / wider screens.
+  static void show(
+    BuildContext context, {
+    required Student student,
+    required String className,
+    required double attendancePct,
+    required int totalPresent,
+    required int totalAbsent,
+    required int totalLate,
+    required int totalExcused,
+  }) {
+    final isMobile = MediaQuery.of(context).size.width < 600;
+
+    if (isMobile) {
+      showModalBottomSheet(
+        context: context,
+        isScrollControlled: true,
+        backgroundColor: Colors.transparent,
+        builder: (context) => SizedBox(
+          height: MediaQuery.of(context).size.height * 0.85,
+          child: StudentProfileScreen(
+            student: student,
+            className: className,
+            attendancePct: attendancePct,
+            totalPresent: totalPresent,
+            totalAbsent: totalAbsent,
+            totalLate: totalLate,
+            totalExcused: totalExcused,
+          ),
+        ),
+      );
+    } else {
+      showDialog(
+        context: context,
+        builder: (context) => Dialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          clipBehavior: Clip.antiAlias,
+          child: SizedBox(
+            width: 560,
+            height: MediaQuery.of(context).size.height * 0.82,
+            child: StudentProfileScreen(
+              student: student,
+              className: className,
+              attendancePct: attendancePct,
+              totalPresent: totalPresent,
+              totalAbsent: totalAbsent,
+              totalLate: totalLate,
+              totalExcused: totalExcused,
+            ),
+          ),
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -32,157 +88,202 @@ class StudentProfileScreen extends StatelessWidget {
         ? const Color(0xFF059669)
         : (attendancePct >= 75 ? const Color(0xFFD97706) : const Color(0xFFEF4444));
 
-    return Scaffold(
-      appBar: AppBar(
-        title: Text('${student.fullName} • Profile'),
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(20),
+    return Material(
+      color: theme.colorScheme.surface,
+      borderRadius: BorderRadius.circular(20),
+      child: SafeArea(
+        top: false,
         child: Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            // ─── Header Card ────────────────────────────────────────────────
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(24),
+            const SizedBox(height: 10),
+            // Drag handle pill for bottom sheet style
+            Container(
+              width: 36,
+              height: 4,
+              decoration: BoxDecoration(
+                color: theme.dividerColor.withValues(alpha: 0.5),
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(height: 6),
+
+            // Modal Header Bar
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      'Student Details',
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close, size: 20),
+                    tooltip: 'Close',
+                    onPressed: () => Navigator.of(context).pop(),
+                  ),
+                ],
+              ),
+            ),
+            const Divider(height: 1),
+
+            // Scrollable Profile Content
+            Flexible(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(20),
                 child: Column(
                   children: [
-                    Hero(
-                      tag: 'student_avatar_${student.id}',
-                      child: CircleAvatar(
-                        radius: 40,
-                        backgroundColor: theme.primaryColor.withValues(alpha: 0.15),
-                        child: Text(
-                          initial,
-                          style: TextStyle(
-                            fontSize: 32,
-                            fontWeight: FontWeight.bold,
-                            color: theme.primaryColor,
-                          ),
+                    // ─── Header Card ────────────────────────────────────────────────
+                    Card(
+                      child: Padding(
+                        padding: const EdgeInsets.all(24),
+                        child: Column(
+                          children: [
+                            Hero(
+                              tag: 'student_avatar_${student.id}',
+                              child: CircleAvatar(
+                                radius: 40,
+                                backgroundColor: theme.primaryColor.withValues(alpha: 0.15),
+                                child: Text(
+                                  initial,
+                                  style: TextStyle(
+                                    fontSize: 32,
+                                    fontWeight: FontWeight.bold,
+                                    color: theme.primaryColor,
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            Text(
+                              student.fullName,
+                              style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+                            ),
+                            const SizedBox(height: 4),
+                            Chip(
+                              label: Text(
+                                'Class $className • Roll #${student.rollNumber}',
+                                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                              ),
+                              backgroundColor: theme.primaryColor.withValues(alpha: 0.08),
+                            ),
+                          ],
                         ),
                       ),
                     ),
+
+                    const SizedBox(height: 16),
+
+                    // ─── KPI Stats Row ─────────────────────────────────────────────
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _statTile(context, 'Attendance', '${attendancePct.toStringAsFixed(1)}%', pctColor),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: _statTile(context, 'Total Sessions', '$totalSessions', theme.colorScheme.primary),
+                        ),
+                      ],
+                    ),
+
                     const SizedBox(height: 12),
-                    Text(
-                      student.fullName,
-                      style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+
+                    Row(
+                      children: [
+                        Expanded(child: _miniStatCard('Present', '$totalPresent', const Color(0xFF059669))),
+                        const SizedBox(width: 8),
+                        Expanded(child: _miniStatCard('Absent', '$totalAbsent', const Color(0xFFEF4444))),
+                        const SizedBox(width: 8),
+                        Expanded(child: _miniStatCard('Late', '$totalLate', const Color(0xFFD97706))),
+                        const SizedBox(width: 8),
+                        Expanded(child: _miniStatCard('Excused', '$totalExcused', const Color(0xFF3B82F6))),
+                      ],
                     ),
-                    const SizedBox(height: 4),
-                    Chip(
-                      label: Text(
-                        'Class $className • Roll #${student.rollNumber}',
-                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
-                      ),
-                      backgroundColor: theme.primaryColor.withValues(alpha: 0.08),
-                    ),
-                  ],
-                ),
-              ),
-            ),
 
-            const SizedBox(height: 16),
+                    const SizedBox(height: 20),
 
-            // ─── KPI Stats Row ─────────────────────────────────────────────
-            Row(
-              children: [
-                Expanded(
-                  child: _statTile(context, 'Attendance', '${attendancePct.toStringAsFixed(1)}%', pctColor),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: _statTile(context, 'Total Sessions', '$totalSessions', theme.colorScheme.primary),
-                ),
-              ],
-            ),
-
-            const SizedBox(height: 12),
-
-            Row(
-              children: [
-                Expanded(child: _miniStatCard('Present', '$totalPresent', const Color(0xFF059669))),
-                const SizedBox(width: 8),
-                Expanded(child: _miniStatCard('Absent', '$totalAbsent', const Color(0xFFEF4444))),
-                const SizedBox(width: 8),
-                Expanded(child: _miniStatCard('Late', '$totalLate', const Color(0xFFD97706))),
-                const SizedBox(width: 8),
-                Expanded(child: _miniStatCard('Excused', '$totalExcused', const Color(0xFF3B82F6))),
-              ],
-            ),
-
-            const SizedBox(height: 20),
-
-            // ─── Attendance Pie Breakdown ──────────────────────────────────
-            if (totalSessions > 0)
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(20),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Attendance Distribution',
-                        style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
-                      ),
-                      const SizedBox(height: 20),
-                      SizedBox(
-                        height: 180,
-                        child: PieChart(
-                          PieChartData(
-                            sectionsSpace: 2,
-                            centerSpaceRadius: 40,
-                            sections: [
-                              if (totalPresent > 0)
-                                PieChartSectionData(
-                                  value: totalPresent.toDouble(),
-                                  color: const Color(0xFF059669),
-                                  title: 'P: $totalPresent',
-                                  titleStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.white),
+                    // ─── Attendance Pie Breakdown ──────────────────────────────────
+                    if (totalSessions > 0)
+                      Card(
+                        child: Padding(
+                          padding: const EdgeInsets.all(20),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Attendance Distribution',
+                                style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+                              ),
+                              const SizedBox(height: 20),
+                              SizedBox(
+                                height: 180,
+                                child: PieChart(
+                                  PieChartData(
+                                    sectionsSpace: 2,
+                                    centerSpaceRadius: 40,
+                                    sections: [
+                                      if (totalPresent > 0)
+                                        PieChartSectionData(
+                                          value: totalPresent.toDouble(),
+                                          color: const Color(0xFF059669),
+                                          title: 'P: $totalPresent',
+                                          titleStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.white),
+                                        ),
+                                      if (totalAbsent > 0)
+                                        PieChartSectionData(
+                                          value: totalAbsent.toDouble(),
+                                          color: const Color(0xFFEF4444),
+                                          title: 'A: $totalAbsent',
+                                          titleStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.white),
+                                        ),
+                                      if (totalLate > 0)
+                                        PieChartSectionData(
+                                          value: totalLate.toDouble(),
+                                          color: const Color(0xFFD97706),
+                                          title: 'L: $totalLate',
+                                          titleStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.white),
+                                        ),
+                                      if (totalExcused > 0)
+                                        PieChartSectionData(
+                                          value: totalExcused.toDouble(),
+                                          color: const Color(0xFF3B82F6),
+                                          title: 'E: $totalExcused',
+                                          titleStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.white),
+                                        ),
+                                    ],
+                                  ),
                                 ),
-                              if (totalAbsent > 0)
-                                PieChartSectionData(
-                                  value: totalAbsent.toDouble(),
-                                  color: const Color(0xFFEF4444),
-                                  title: 'A: $totalAbsent',
-                                  titleStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.white),
-                                ),
-                              if (totalLate > 0)
-                                PieChartSectionData(
-                                  value: totalLate.toDouble(),
-                                  color: const Color(0xFFD97706),
-                                  title: 'L: $totalLate',
-                                  titleStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.white),
-                                ),
-                              if (totalExcused > 0)
-                                PieChartSectionData(
-                                  value: totalExcused.toDouble(),
-                                  color: const Color(0xFF3B82F6),
-                                  title: 'E: $totalExcused',
-                                  titleStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.white),
-                                ),
+                              ),
                             ],
                           ),
                         ),
                       ),
-                    ],
-                  ),
-                ),
-              ),
 
-            const SizedBox(height: 16),
+                    const SizedBox(height: 16),
 
-            // ─── Details Section ───────────────────────────────────────────
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(20),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('Student Information', style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
-                    const SizedBox(height: 12),
-                    _infoRow(Icons.badge_outlined, 'Admission Number', student.admissionNumber),
-                    _infoRow(Icons.person_outline, 'Gender', student.gender == 'M' ? 'Male' : (student.gender == 'F' ? 'Female' : 'Other')),
-                    _infoRow(Icons.cake_outlined, 'Date of Birth', student.dob != null && student.dob!.isNotEmpty ? student.dob!.split('T')[0] : 'N/A'),
-                    _infoRow(Icons.family_restroom_outlined, 'Guardian Name', student.guardianName ?? 'N/A'),
-                    _infoRow(Icons.phone_outlined, 'Guardian Phone', student.guardianPhone ?? 'N/A'),
+                    // ─── Details Section ───────────────────────────────────────────
+                    Card(
+                      child: Padding(
+                        padding: const EdgeInsets.all(20),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('Student Information', style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
+                            const SizedBox(height: 12),
+                            _infoRow(Icons.badge_outlined, 'Admission Number', student.admissionNumber),
+                            _infoRow(Icons.person_outline, 'Gender', student.gender == 'M' ? 'Male' : (student.gender == 'F' ? 'Female' : 'Other')),
+                            _infoRow(Icons.cake_outlined, 'Date of Birth', student.dob != null && student.dob!.isNotEmpty ? student.dob!.split('T')[0] : 'N/A'),
+                            _infoRow(Icons.family_restroom_outlined, 'Guardian Name', student.guardianName ?? 'N/A'),
+                            _infoRow(Icons.phone_outlined, 'Guardian Phone', student.guardianPhone ?? 'N/A'),
+                          ],
+                        ),
+                      ),
+                    ),
                   ],
                 ),
               ),

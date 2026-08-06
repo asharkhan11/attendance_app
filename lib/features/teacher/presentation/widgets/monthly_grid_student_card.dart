@@ -121,7 +121,6 @@ class MonthlyGridStudentCard extends StatelessWidget {
                 child: Row(
                   children: List.generate(daysInMonth, (i) {
                     final dayNum = i + 1;
-                    final isSelected = dayNum == selectedDate.day;
                     final dateKey =
                         "${selectedDate.year}-${selectedDate.month.toString().padLeft(2, '0')}-${dayNum.toString().padLeft(2, '0')}";
                     final code = student.dailyStatus[dateKey] ??
@@ -132,20 +131,13 @@ class MonthlyGridStudentCard extends StatelessWidget {
                       padding: const EdgeInsets.only(right: 4.0),
                       child: Container(
                         padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 2),
-                        decoration: isSelected
-                            ? BoxDecoration(
-                                color: Theme.of(context).primaryColor.withValues(alpha: 0.15),
-                                borderRadius: BorderRadius.circular(4),
-                                border: Border.all(color: Theme.of(context).primaryColor, width: 1.5),
-                              )
-                            : null,
                         child: Column(
                           children: [
                             Text(
                               '$dayNum',
                               style: TextStyle(
-                                fontSize: isSelected ? 10 : 9,
-                                color: isSelected ? Theme.of(context).primaryColor : Colors.grey.shade700,
+                                fontSize: 9,
+                                color: Colors.grey.shade700,
                                 fontWeight: FontWeight.bold,
                               ),
                             ),

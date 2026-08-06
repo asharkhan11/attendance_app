@@ -5,10 +5,10 @@ import '../widgets/searchable_dropdown.dart';
 
 import '../design_system/app_breakpoints.dart';
 import '../design_system/app_spacing.dart';
+import '../design_system/attendance_theme.dart';
 import '../features/attendance/presentation/widgets/counter_header.dart';
 import '../features/attendance/presentation/widgets/roster_item.dart';
 import '../shared/widgets/app_skeleton.dart';
-import '../shared/widgets/app_vertical_navbar.dart';
 
 class MarkAttendanceScreen extends StatefulWidget {
   final AttendanceSession session;
@@ -33,12 +33,22 @@ class _MarkAttendanceScreenState extends State<MarkAttendanceScreen> {
   List<RosterEntry> _roster = [];
   bool _isClosed = false;
   String _filterStatus =
-      'all'; // 'all', 'present', 'absent', 'late', 'excused', 'unmarked'
+      'all'; // 'all', 'present', 'absent', 'late', 'excused'
 
   @override
   void initState() {
     super.initState();
     _loadSessionRoster();
+  }
+
+  @override
+  void didUpdateWidget(MarkAttendanceScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.session.id != widget.session.id ||
+        oldWidget.session.sessionDate != widget.session.sessionDate) {
+      _isClosed = false;
+      _loadSessionRoster();
+    }
   }
 
   @override
@@ -95,16 +105,18 @@ class _MarkAttendanceScreenState extends State<MarkAttendanceScreen> {
       await _apiService.markAttendance(widget.session.id, marks);
 
       if (mounted) {
+        final attTheme = Theme.of(context).extension<AttendanceTheme>() ?? AttendanceTheme.light;
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Row(
+          SnackBar(
+            content: const Row(
               children: [
-                Icon(Icons.check_circle, color: Colors.white),
+                Icon(Icons.check_circle_rounded, color: Colors.white),
                 SizedBox(width: 10),
                 Text('Attendance records saved successfully!'),
               ],
             ),
-            backgroundColor: Colors.green,
+            backgroundColor: attTheme.present,
+            behavior: SnackBarBehavior.floating,
           ),
         );
       }
@@ -114,6 +126,7 @@ class _MarkAttendanceScreenState extends State<MarkAttendanceScreen> {
           SnackBar(
             content: Text('Failed to save attendance: $e'),
             backgroundColor: Colors.redAccent,
+            behavior: SnackBarBehavior.floating,
           ),
         );
       }
@@ -129,19 +142,27 @@ class _MarkAttendanceScreenState extends State<MarkAttendanceScreen> {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Row(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
           children: [
-            Icon(Icons.lock, color: Colors.orange),
-            SizedBox(width: 10),
-            Text('Lock & Close Session?'),
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.amber.shade100,
+                shape: BoxShape.circle,
+              ),
+              child: Icon(Icons.lock_rounded, color: Colors.amber.shade900, size: 20),
+            ),
+            const SizedBox(width: 10),
+            const Text('Lock & Close Session?'),
           ],
         ),
         content: Text(
           'Closing this session will lock the daily attendance record for this date.\n\n'
-          'Summary:\n'
+          'Roster Summary:\n'
           '• Present: $presentCount\n'
           '• Absent: $absentCount\n'
-          '• Total Roster: ${_roster.length}\n\n'
+          '• Total Students: ${_roster.length}\n\n'
           'Are you sure you want to finalize and lock this daily session?',
         ),
         actions: [
@@ -149,16 +170,18 @@ class _MarkAttendanceScreenState extends State<MarkAttendanceScreen> {
             onPressed: () => Navigator.pop(ctx),
             child: const Text('CANCEL'),
           ),
-          ElevatedButton(
+          ElevatedButton.icon(
             style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.orange.shade800,
+              backgroundColor: Colors.amber.shade800,
               foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
             ),
             onPressed: () async {
               Navigator.pop(ctx);
               await _closeSession();
             },
-            child: const Text('FINAL LOCK & CLOSE'),
+            icon: const Icon(Icons.lock_rounded, size: 18),
+            label: const Text('FINAL LOCK & CLOSE'),
           ),
         ],
       ),
@@ -174,7 +197,8 @@ class _MarkAttendanceScreenState extends State<MarkAttendanceScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Session finalized and locked.'),
-            backgroundColor: Colors.orange,
+            backgroundColor: Colors.amber,
+            behavior: SnackBarBehavior.floating,
           ),
         );
       }
@@ -184,6 +208,7 @@ class _MarkAttendanceScreenState extends State<MarkAttendanceScreen> {
           SnackBar(
             content: Text('Error closing session: $e'),
             backgroundColor: Colors.redAccent,
+            behavior: SnackBarBehavior.floating,
           ),
         );
       }
@@ -193,23 +218,40 @@ class _MarkAttendanceScreenState extends State<MarkAttendanceScreen> {
   void _showSingleStudentEditDialog(RosterEntry entry) {
     String selectedStatus = entry.status;
     final remarksCtrl = TextEditingController(text: entry.remarks ?? '');
+    final attTheme = Theme.of(context).extension<AttendanceTheme>() ?? AttendanceTheme.light;
 
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text('Edit Student Note — ${entry.fullName}'),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: [
+            CircleAvatar(
+              backgroundColor: Theme.of(context).primaryColor.withValues(alpha: 0.1),
+              child: Icon(Icons.person_rounded, color: Theme.of(context).primaryColor),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    entry.fullName,
+                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                  ),
+                  Text(
+                    'Roll No: ${entry.rollNumber}',
+                    style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
         content: StatefulBuilder(
           builder: (_, setD) => Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text(
-                'Roll No: ${entry.rollNumber}',
-                style: TextStyle(
-                  color: Colors.grey.shade700,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const SizedBox(height: 16),
               SearchableDropdown<String>(
                 value: selectedStatus,
                 labelText: 'Attendance Status',
@@ -218,20 +260,20 @@ class _MarkAttendanceScreenState extends State<MarkAttendanceScreen> {
                 itemBuilder: (ctx, s, isSel) => Text(
                   s[0].toUpperCase() + s.substring(1),
                   style: TextStyle(
-                    color: _getStatusColor(s),
+                    color: _getStatusColor(s, attTheme),
                     fontWeight: FontWeight.bold,
                   ),
                 ),
                 onChanged: (v) =>
                     setD(() => selectedStatus = v ?? selectedStatus),
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 14),
               TextField(
                 controller: remarksCtrl,
-                decoration: const InputDecoration(
-                  labelText: 'Remarks / Absence Reason',
-                  hintText: 'e.g. Doctor note submitted, Parent called',
-                  border: OutlineInputBorder(),
+                decoration: InputDecoration(
+                  labelText: 'Remarks / Reason for Absence',
+                  hintText: 'e.g. Sick leave, Medical note submitted',
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
                 ),
                 maxLines: 2,
               ),
@@ -244,6 +286,11 @@ class _MarkAttendanceScreenState extends State<MarkAttendanceScreen> {
             child: const Text('CANCEL'),
           ),
           ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Theme.of(context).primaryColor,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
             onPressed: () async {
               final nav = Navigator.of(ctx);
               try {
@@ -265,7 +312,8 @@ class _MarkAttendanceScreenState extends State<MarkAttendanceScreen> {
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
                       content: Text('Updated ${entry.fullName}'),
-                      backgroundColor: Colors.green,
+                      backgroundColor: attTheme.present,
+                      behavior: SnackBarBehavior.floating,
                     ),
                   );
                 }
@@ -275,12 +323,13 @@ class _MarkAttendanceScreenState extends State<MarkAttendanceScreen> {
                     SnackBar(
                       content: Text('Failed to update: $e'),
                       backgroundColor: Colors.redAccent,
+                      behavior: SnackBarBehavior.floating,
                     ),
                   );
                 }
               }
             },
-            child: const Text('SAVE NOTE'),
+            child: const Text('SAVE REMARKS'),
           ),
         ],
       ),
@@ -295,18 +344,18 @@ class _MarkAttendanceScreenState extends State<MarkAttendanceScreen> {
     });
   }
 
-  Color _getStatusColor(String status) {
+  Color _getStatusColor(String status, AttendanceTheme attTheme) {
     switch (status) {
       case 'present':
-        return Colors.green.shade700;
+        return attTheme.present;
       case 'absent':
-        return Colors.red.shade700;
+        return attTheme.absent;
       case 'late':
-        return Colors.orange.shade800;
+        return attTheme.late;
       case 'excused':
-        return Colors.blue.shade700;
+        return attTheme.excused;
       default:
-        return Colors.grey.shade700;
+        return attTheme.noRecord;
     }
   }
 
@@ -329,209 +378,370 @@ class _MarkAttendanceScreenState extends State<MarkAttendanceScreen> {
     final lateCount = _roster.where((r) => r.status == 'late').length;
     final excusedCount = _roster.where((r) => r.status == 'excused').length;
 
-    final mainScaffold = Scaffold(
-      appBar: AppBar(
-        title: Text('${widget.schoolClass.displayName} • Daily Attendance'),
-        actions: [
-          if (!_isClosed) ...[
-            PopupMenuButton<String>(
-              tooltip: 'Bulk Mark All',
-              icon: const Icon(Icons.checklist),
-              onSelected: _markAllAs,
-              itemBuilder: (_) => [
-                const PopupMenuItem(
-                  value: 'present',
-                  child: Text('Mark All Present'),
-                ),
-                const PopupMenuItem(
-                  value: 'absent',
-                  child: Text('Mark All Absent'),
-                ),
-                const PopupMenuItem(
-                  value: 'late',
-                  child: Text('Mark All Late'),
-                ),
-              ],
-            ),
-            IconButton(
-              icon: const Icon(Icons.lock_outline),
-              tooltip: 'Lock & Close Session',
-              onPressed: _confirmCloseSession,
+    if (_isLoading) {
+      return Padding(
+        padding: const EdgeInsets.all(AppSpacing.md),
+        child: Column(
+          children: const [
+            AppSkeleton(width: double.infinity, height: 130),
+            SizedBox(height: AppSpacing.md),
+            AppSkeleton(width: double.infinity, height: 48),
+            SizedBox(height: AppSpacing.md),
+            Expanded(
+              child: AppSkeleton(
+                width: double.infinity,
+                height: double.infinity,
+              ),
             ),
           ],
-        ],
-      ),
-      body: _isLoading
-          ? Padding(
-              padding: const EdgeInsets.all(AppSpacing.md),
-              child: Column(
-                children: const [
-                  AppSkeleton(width: double.infinity, height: 100),
-                  SizedBox(height: AppSpacing.md),
-                  AppSkeleton(width: double.infinity, height: 50),
-                  SizedBox(height: AppSpacing.md),
-                  Expanded(
-                    child: AppSkeleton(
-                      width: double.infinity,
-                      height: double.infinity,
+        ),
+      );
+    }
+
+    return Stack(
+      children: [
+        Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 920),
+            child: CustomScrollView(
+              physics: const BouncingScrollPhysics(),
+              slivers: [
+                // Summary Stat Header Banner
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.only(
+                      top: AppSpacing.sm,
+                      left: AppSpacing.sm,
+                      right: AppSpacing.sm,
+                      bottom: AppSpacing.xs,
+                    ),
+                    child: CounterHeader(
+                      dateText: widget.session.sessionDate,
+                      isClosed: _isClosed,
+                      presentCount: presentCount,
+                      absentCount: absentCount,
+                      lateCount: lateCount,
+                      excusedCount: excusedCount,
+                      onMarkAllPresent: _isClosed ? null : () => _markAllAs('present'),
+                      onMarkAllAbsent: _isClosed ? null : () => _markAllAs('absent'),
+                      onLockSession: _isClosed ? null : _confirmCloseSession,
                     ),
                   ),
-                ],
-              ),
-            )
-          : Center(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 920),
-                child: CustomScrollView(
-                  slivers: [
-                    // Sticky Header with Summary Stats
-                    SliverToBoxAdapter(
-                      child: Padding(
-                        padding: const EdgeInsets.all(AppSpacing.md),
-                        child: CounterHeader(
-                          dateText: widget.session.sessionDate,
-                          isClosed: _isClosed,
-                          presentCount: presentCount,
-                          absentCount: absentCount,
-                          lateCount: lateCount,
-                          excusedCount: excusedCount,
+                ),
+
+                // Search & Filter Toolbar
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: AppSpacing.sm,
+                      vertical: AppSpacing.xs,
+                    ),
+                    child: Container(
+                      padding: EdgeInsets.all(context.isMobile ? 8 : 10),
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).cardColor,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: Theme.of(context).dividerColor.withValues(alpha: 0.6),
                         ),
                       ),
-                    ),
-
-                    // Sticky Toolbar with Search & Filter Chips
-                    SliverToBoxAdapter(
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: AppSpacing.md,
-                          vertical: AppSpacing.xs,
-                        ),
-                        child: Column(
-                          children: [
-                            TextField(
-                              controller: _searchCtrl,
-                              decoration: InputDecoration(
-                                hintText: 'Search student by name or roll number...',
-                                prefixIcon: const Icon(Icons.search),
-                                suffixIcon: _searchCtrl.text.isNotEmpty
-                                    ? IconButton(
-                                        icon: const Icon(Icons.clear),
-                                        onPressed: () {
-                                          _searchCtrl.clear();
-                                          setState(() {});
-                                        },
-                                      )
-                                    : null,
-                              ),
-                              onChanged: (_) => setState(() {}),
+                      child: context.isMobile
+                          ? Column(
+                              children: [
+                                SizedBox(
+                                  height: 38,
+                                  child: TextField(
+                                    controller: _searchCtrl,
+                                    style: const TextStyle(fontSize: 12),
+                                    decoration: InputDecoration(
+                                      hintText: 'Search student by name or roll...',
+                                      prefixIcon: const Icon(Icons.search, size: 18),
+                                      suffixIcon: _searchCtrl.text.isNotEmpty
+                                          ? IconButton(
+                                              icon: const Icon(Icons.clear, size: 16),
+                                              onPressed: () {
+                                                _searchCtrl.clear();
+                                                setState(() {});
+                                              },
+                                            )
+                                          : null,
+                                      isDense: true,
+                                      contentPadding: const EdgeInsets.symmetric(
+                                        horizontal: 10,
+                                        vertical: 8,
+                                      ),
+                                      border: OutlineInputBorder(
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                      enabledBorder: OutlineInputBorder(
+                                        borderRadius: BorderRadius.circular(8),
+                                        borderSide: BorderSide(
+                                          color: Theme.of(context).dividerColor,
+                                        ),
+                                      ),
+                                    ),
+                                    onChanged: (_) => setState(() {}),
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                SingleChildScrollView(
+                                  scrollDirection: Axis.horizontal,
+                                  child: Row(
+                                    children: [
+                                      _filterChip('all', 'All (${_roster.length})'),
+                                      _filterChip('present', 'Present ($presentCount)'),
+                                      _filterChip('absent', 'Absent ($absentCount)'),
+                                      _filterChip('late', 'Late ($lateCount)'),
+                                      _filterChip('excused', 'Excused ($excusedCount)'),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            )
+                          : Row(
+                              children: [
+                                Expanded(
+                                  child: SizedBox(
+                                    height: 38,
+                                    child: TextField(
+                                      controller: _searchCtrl,
+                                      style: const TextStyle(fontSize: 13),
+                                      decoration: InputDecoration(
+                                        hintText: 'Search student by name or roll number...',
+                                        prefixIcon: const Icon(Icons.search, size: 18),
+                                        suffixIcon: _searchCtrl.text.isNotEmpty
+                                            ? IconButton(
+                                                icon: const Icon(Icons.clear, size: 16),
+                                                onPressed: () {
+                                                  _searchCtrl.clear();
+                                                  setState(() {});
+                                                },
+                                              )
+                                            : null,
+                                        isDense: true,
+                                        contentPadding: const EdgeInsets.symmetric(
+                                          horizontal: 10,
+                                          vertical: 8,
+                                        ),
+                                        border: OutlineInputBorder(
+                                          borderRadius: BorderRadius.circular(8),
+                                        ),
+                                        enabledBorder: OutlineInputBorder(
+                                          borderRadius: BorderRadius.circular(8),
+                                          borderSide: BorderSide(
+                                            color: Theme.of(context).dividerColor,
+                                          ),
+                                        ),
+                                      ),
+                                      onChanged: (_) => setState(() {}),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                SingleChildScrollView(
+                                  scrollDirection: Axis.horizontal,
+                                  child: Row(
+                                    children: [
+                                      _filterChip('all', 'All (${_roster.length})'),
+                                      _filterChip('present', 'Present ($presentCount)'),
+                                      _filterChip('absent', 'Absent ($absentCount)'),
+                                      _filterChip('late', 'Late ($lateCount)'),
+                                      _filterChip('excused', 'Excused ($excusedCount)'),
+                                    ],
+                                  ),
+                                ),
+                              ],
                             ),
-                            const SizedBox(height: AppSpacing.sm),
-                            SingleChildScrollView(
-                              scrollDirection: Axis.horizontal,
-                              child: Row(
-                                children: [
-                                  _filterChip('all', 'All (${_roster.length})'),
-                                  _filterChip('present', 'Present ($presentCount)'),
-                                  _filterChip('absent', 'Absent ($absentCount)'),
-                                  _filterChip('late', 'Late ($lateCount)'),
-                                  _filterChip('excused', 'Excused ($excusedCount)'),
-                                ],
+                    ),
+                  ),
+                ),
+
+                // Roster List
+                if (filteredRoster.isEmpty)
+                  SliverFillRemaining(
+                    hasScrollBody: false,
+                    child: Center(
+                      child: Padding(
+                        padding: const EdgeInsets.all(AppSpacing.xl),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.search_off_rounded,
+                              size: 48,
+                              color: Theme.of(context).disabledColor,
+                            ),
+                            const SizedBox(height: 12),
+                            Text(
+                              'No students match filter',
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                color: Theme.of(context).textTheme.titleMedium?.color,
+                                fontSize: 15,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              'Try clearing your search query or selecting "All"',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Theme.of(context).textTheme.bodySmall?.color,
                               ),
                             ),
                           ],
                         ),
                       ),
                     ),
+                  )
+                else
+                  SliverFixedExtentList(
+                    itemExtent: kRosterItemExtent,
+                    delegate: SliverChildBuilderDelegate((context, index) {
+                      final item = filteredRoster[index];
+                      return RosterItem(
+                        key: ValueKey('roster_item_${item.studentId}'),
+                        entry: item,
+                        isClosed: _isClosed,
+                        onStatusChanged: (newStatus) {
+                          setState(() => item.status = newStatus);
+                        },
+                        onTap: _isClosed
+                            ? null
+                            : () => _showSingleStudentEditDialog(item),
+                      );
+                    }, childCount: filteredRoster.length),
+                  ),
 
-                    // Roster list sliver
-                    if (filteredRoster.isEmpty)
-                      const SliverFillRemaining(
-                        child: Center(
-                          child: Text('No students match the selected filter.'),
-                        ),
-                      )
-                    else
-                      SliverFixedExtentList(
-                        itemExtent: kRosterItemExtent,
-                        delegate: SliverChildBuilderDelegate((context, index) {
-                          final item = filteredRoster[index];
-                          return RosterItem(
-                            key: ValueKey('roster_item_${item.studentId}'),
-                            entry: item,
-                            isClosed: _isClosed,
-                            onStatusChanged: (newStatus) {
-                              setState(() => item.status = newStatus);
-                            },
-                            onTap: _isClosed
-                                ? null
-                                : () => _showSingleStudentEditDialog(item),
-                          );
-                        }, childCount: filteredRoster.length),
-                      ),
-
-                    // Bottom padding to ensure last item scrolls clear of sticky save bar
-                    const SliverToBoxAdapter(
-                      child: SizedBox(height: 88),
-                    ),
-                  ],
+                // Bottom padding to ensure items scroll clear of floating save bar
+                SliverToBoxAdapter(
+                  child: SizedBox(height: _isClosed ? 24 : 90),
                 ),
-              ),
+              ],
             ),
-      bottomNavigationBar: _isClosed
-          ? null
-          : Center(
-              heightFactor: 1,
+          ),
+        ),
+
+        // Floating Bottom Save Action Bar
+        if (!_isClosed)
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: context.isMobile ? 6 : 12,
+            child: Center(
               child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 920),
-                child: Container(
-                  padding: const EdgeInsets.all(AppSpacing.md),
-                  decoration: BoxDecoration(
-                    color: Theme.of(context).cardColor,
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.05),
-                        blurRadius: 10,
-                        offset: const Offset(0, -5),
-                      ),
-                    ],
+                constraints: const BoxConstraints(maxWidth: 880),
+                child: Padding(
+                  padding: EdgeInsets.symmetric(
+                    horizontal: context.isMobile ? AppSpacing.sm : AppSpacing.md,
                   ),
-                  child: ElevatedButton.icon(
-                    style: ElevatedButton.styleFrom(
-                      minimumSize: const Size.fromHeight(50),
-                      backgroundColor: Theme.of(context).primaryColor,
-                      foregroundColor: Colors.white,
+                  child: Container(
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(context.isMobile ? 12 : 16),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Theme.of(context)
+                              .primaryColor
+                              .withValues(alpha: 0.25),
+                          blurRadius: 12,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
                     ),
-                    onPressed: _isSaving ? null : _submitBulkMark,
-                    icon: _isSaving
-                        ? const SizedBox(
-                            width: 18,
-                            height: 18,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: Colors.white,
-                            ),
-                          )
-                        : const Icon(Icons.save),
-                    label: Text(
-                      _isSaving ? 'SAVING RECORDS...' : 'SAVE ATTENDANCE RECORDS',
-                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                    child: ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        minimumSize: Size.fromHeight(context.isMobile ? 44 : 52),
+                        backgroundColor: Theme.of(context).primaryColor,
+                        foregroundColor: Colors.white,
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(context.isMobile ? 12 : 16),
+                        ),
+                      ),
+                      onPressed: _isSaving ? null : _submitBulkMark,
+                      icon: _isSaving
+                          ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2.2,
+                                color: Colors.white,
+                              ),
+                            )
+                          : Icon(Icons.save_rounded, size: context.isMobile ? 18 : 22),
+                      label: Text(
+                        _isSaving
+                            ? 'SAVING...'
+                            : 'SAVE ATTENDANCE RECORDS',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: context.isMobile ? 13 : 15,
+                          letterSpacing: 0.5,
+                        ),
+                      ),
                     ),
                   ),
                 ),
               ),
             ),
+          ),
+      ],
     );
-
-    return mainScaffold;
   }
 
   Widget _filterChip(String key, String label) {
     final isSelected = _filterStatus == key;
+    final attTheme = Theme.of(context).extension<AttendanceTheme>() ?? AttendanceTheme.light;
+    Color fgColor;
+    Color bgColor;
+
+    switch (key) {
+      case 'present':
+        fgColor = attTheme.present;
+        bgColor = attTheme.presentBg;
+        break;
+      case 'absent':
+        fgColor = attTheme.absent;
+        bgColor = attTheme.absentBg;
+        break;
+      case 'late':
+        fgColor = attTheme.late;
+        bgColor = attTheme.lateBg;
+        break;
+      case 'excused':
+        fgColor = attTheme.excused;
+        bgColor = attTheme.excusedBg;
+        break;
+      default:
+        fgColor = Theme.of(context).primaryColor;
+        bgColor = Theme.of(context).primaryColor.withValues(alpha: 0.12);
+    }
+
     return Padding(
       padding: const EdgeInsets.only(right: 6.0),
-      child: ChoiceChip(
-        label: Text(label, style: const TextStyle(fontSize: 12)),
+      child: FilterChip(
+        label: Text(
+          label,
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+            color: isSelected
+                ? (key == 'all' ? Colors.white : fgColor)
+                : Theme.of(context).textTheme.bodyMedium?.color,
+          ),
+        ),
         selected: isSelected,
+        showCheckmark: false,
+        backgroundColor: Theme.of(context).brightness == Brightness.dark
+            ? Colors.grey.shade800
+            : Colors.grey.shade100,
+        selectedColor: key == 'all'
+            ? Theme.of(context).primaryColor
+            : bgColor,
+        side: BorderSide(
+          color: isSelected
+              ? fgColor
+              : Theme.of(context).dividerColor,
+        ),
         onSelected: (sel) {
           if (sel) setState(() => _filterStatus = key);
         },
