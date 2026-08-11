@@ -479,22 +479,34 @@ class ApiService {
       put('/api/v1/students/$id', data);
   Future<dynamic> deleteStudent(String id) => delete('/api/v1/students/$id');
 
-  Future<dynamic> bulkImportStudents(Uint8List bytes, String filename) async {
+  Future<dynamic> bulkImportStudents(
+    Uint8List bytes,
+    String filename, {
+    String? classId,
+  }) async {
     final token = await getToken();
-    final request =
-        http.MultipartRequest('POST', _uri('/api/v1/students/bulk-import'))
-          ..headers.addAll(_headers(token, json: false))
-          ..files.add(
-            http.MultipartFile.fromBytes('file', bytes, filename: filename),
-          );
+    final queryParams = <String, String>{};
+    if (classId != null && classId.isNotEmpty) {
+      queryParams['class_id'] = classId;
+    }
+    final request = http.MultipartRequest(
+      'POST',
+      _uri('/api/v1/students/bulk-import', queryParams.isEmpty ? null : queryParams),
+    )
+      ..headers.addAll(_headers(token, json: false))
+      ..files.add(
+        http.MultipartFile.fromBytes('file', bytes, filename: filename),
+      );
     var streamed = await request.send();
     if (streamed.statusCode == 401 && await _refreshAccessToken()) {
-      final retry =
-          http.MultipartRequest('POST', _uri('/api/v1/students/bulk-import'))
-            ..headers.addAll(_headers(await getToken(), json: false))
-            ..files.add(
-              http.MultipartFile.fromBytes('file', bytes, filename: filename),
-            );
+      final retry = http.MultipartRequest(
+        'POST',
+        _uri('/api/v1/students/bulk-import', queryParams.isEmpty ? null : queryParams),
+      )
+        ..headers.addAll(_headers(await getToken(), json: false))
+        ..files.add(
+          http.MultipartFile.fromBytes('file', bytes, filename: filename),
+        );
       streamed = await retry.send();
     }
     return _processResponse(await http.Response.fromStream(streamed));

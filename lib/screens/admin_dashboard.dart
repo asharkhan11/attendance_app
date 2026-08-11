@@ -2509,7 +2509,11 @@ class _StudentsTabState extends State<_StudentsTab> {
         widget.snack('Could not read file bytes');
         return;
       }
-      await widget.api.bulkImportStudents(file.bytes!, file.name);
+      await widget.api.bulkImportStudents(
+        file.bytes!,
+        file.name,
+        classId: _filterClass?.id,
+      );
       widget.snack('Bulk import successful', error: false);
       _loadStudents();
     } catch (e) {
