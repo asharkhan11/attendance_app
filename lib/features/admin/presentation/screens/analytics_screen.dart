@@ -1,3 +1,4 @@
+import 'package:attendance_app/features/teacher/presentation/screens/student_profile_screen.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import '../../../../design_system/app_breakpoints.dart';
@@ -210,11 +211,17 @@ class _AnalyticsScreenState extends State<AnalyticsScreen>
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.analytics_outlined, size: 64, color: Colors.orange.shade400),
+            Icon(
+              Icons.analytics_outlined,
+              size: 64,
+              color: Colors.orange.shade400,
+            ),
             const SizedBox(height: 16),
             Text(
               'No Academic Session Selected',
-              style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+              style: theme.textTheme.titleLarge?.copyWith(
+                fontWeight: FontWeight.bold,
+              ),
             ),
             const SizedBox(height: 8),
             const Text(
@@ -234,37 +241,41 @@ class _AnalyticsScreenState extends State<AnalyticsScreen>
       return null;
     }
 
-    double overallPct = (findNum([
-          'overall_attendance_pct',
-          'attendance_percentage',
-          'overall_attendance_percentage',
-          'attendance_rate',
-          'average_attendance',
-        ]) ??
-        0.0).toDouble();
+    double overallPct =
+        (findNum([
+                  'overall_attendance_pct',
+                  'attendance_percentage',
+                  'overall_attendance_percentage',
+                  'attendance_rate',
+                  'average_attendance',
+                ]) ??
+                0.0)
+            .toDouble();
 
-    int totalStudents = (findNum([
-          'total_students',
-          'enrolled_students',
-          'student_count',
-          'students_count',
-        ]) ??
-        0).toInt();
+    int totalStudents =
+        (findNum([
+                  'total_students',
+                  'enrolled_students',
+                  'student_count',
+                  'students_count',
+                ]) ??
+                0)
+            .toInt();
 
-    int totalSessions = (findNum([
-          'total_sessions',
-          'sessions_conducted',
-          'session_count',
-          'sessions_count',
-        ]) ??
-        0).toInt();
+    int totalSessions =
+        (findNum([
+                  'total_sessions',
+                  'sessions_conducted',
+                  'session_count',
+                  'sessions_count',
+                ]) ??
+                0)
+            .toInt();
 
-    int totalDefaulters = (findNum([
-          'total_defaulters',
-          'defaulters_count',
-          'defaulter_count',
-        ]) ??
-        0).toInt();
+    int totalDefaulters =
+        (findNum(['total_defaulters', 'defaulters_count', 'defaulter_count']) ??
+                0)
+            .toInt();
 
     final rawComparisons = (_overviewData?['class_comparisons'] as List?) ?? [];
     final classComparisons = _selectedClass == null
@@ -339,10 +350,22 @@ class _AnalyticsScreenState extends State<AnalyticsScreen>
                       isDense: true,
                       underline: const SizedBox(),
                       items: [
-                        const DropdownMenuItem(value: 'week', child: Text('Last 7 Days')),
-                        const DropdownMenuItem(value: 'month', child: Text('This Month')),
-                        const DropdownMenuItem(value: '90days', child: Text('Last 90 Days')),
-                        const DropdownMenuItem(value: 'all', child: Text('All Time')),
+                        const DropdownMenuItem(
+                          value: 'week',
+                          child: Text('Last 7 Days'),
+                        ),
+                        const DropdownMenuItem(
+                          value: 'month',
+                          child: Text('This Month'),
+                        ),
+                        const DropdownMenuItem(
+                          value: '90days',
+                          child: Text('Last 90 Days'),
+                        ),
+                        const DropdownMenuItem(
+                          value: 'all',
+                          child: Text('All Time'),
+                        ),
                         DropdownMenuItem(
                           value: 'custom',
                           child: Text(
@@ -358,9 +381,12 @@ class _AnalyticsScreenState extends State<AnalyticsScreen>
                             final now = DateTime.now();
                             final picked = await showDateRangePicker(
                               context: context,
-                              initialDateRange: _customDateRange ??
+                              initialDateRange:
+                                  _customDateRange ??
                                   DateTimeRange(
-                                    start: now.subtract(const Duration(days: 30)),
+                                    start: now.subtract(
+                                      const Duration(days: 30),
+                                    ),
                                     end: now,
                                   ),
                               firstDate: DateTime(2020),
@@ -384,7 +410,10 @@ class _AnalyticsScreenState extends State<AnalyticsScreen>
                     Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        const Text('Defaulter Cutoff:', style: TextStyle(fontSize: 13)),
+                        const Text(
+                          'Defaulter Cutoff:',
+                          style: TextStyle(fontSize: 13),
+                        ),
                         const SizedBox(width: 6),
                         SizedBox(
                           width: 70,
@@ -393,7 +422,10 @@ class _AnalyticsScreenState extends State<AnalyticsScreen>
                             decoration: const InputDecoration(
                               suffixText: '%',
                               isDense: true,
-                              contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                              contentPadding: EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 6,
+                              ),
                             ),
                             keyboardType: TextInputType.number,
                             onFieldSubmitted: (v) {
@@ -424,7 +456,14 @@ class _AnalyticsScreenState extends State<AnalyticsScreen>
               )
             else ...[
               // ─── KPI Cards Row ───────────────────────────────────────────
-              _buildKpiRow(theme, overallPct, totalStudents, totalSessions, totalDefaulters, isDesktop),
+              _buildKpiRow(
+                theme,
+                overallPct,
+                totalStudents,
+                totalSessions,
+                totalDefaulters,
+                isDesktop,
+              ),
               const SizedBox(height: 20),
 
               // ─── Charts Section ──────────────────────────────────────────
@@ -434,7 +473,13 @@ class _AnalyticsScreenState extends State<AnalyticsScreen>
                   children: [
                     Expanded(flex: 3, child: _buildTrendLineChart(theme)),
                     const SizedBox(width: 16),
-                    Expanded(flex: 2, child: _buildClassComparisonBarChart(theme, classComparisons)),
+                    Expanded(
+                      flex: 2,
+                      child: _buildClassComparisonBarChart(
+                        theme,
+                        classComparisons,
+                      ),
+                    ),
                   ],
                 )
               else ...[
@@ -463,17 +508,48 @@ class _AnalyticsScreenState extends State<AnalyticsScreen>
     bool isDesktop,
   ) {
     final cards = [
-      _kpiCard('Overall Attendance', '${overallPct.toStringAsFixed(1)}%', Icons.trending_up,
-          overallPct >= 85 ? const Color(0xFF059669) : (overallPct >= 75 ? const Color(0xFFD97706) : const Color(0xFFEF4444))),
-      _kpiCard('Total Students', '$totalStudents', Icons.people_outline, const Color(0xFF3B82F6)),
-      _kpiCard('Sessions Conducted', '$totalSessions', Icons.event_available, const Color(0xFF8B5CF6)),
-      _kpiCard('Defaulters (<${_threshold.toStringAsFixed(0)}%)', '$totalDefaulters', Icons.warning_amber_rounded,
-          totalDefaulters > 0 ? const Color(0xFFEF4444) : const Color(0xFF059669)),
+      _kpiCard(
+        'Overall Attendance',
+        '${overallPct.toStringAsFixed(1)}%',
+        Icons.trending_up,
+        overallPct >= 85
+            ? const Color(0xFF059669)
+            : (overallPct >= 75
+                  ? const Color(0xFFD97706)
+                  : const Color(0xFFEF4444)),
+      ),
+      _kpiCard(
+        'Total Students',
+        '$totalStudents',
+        Icons.people_outline,
+        const Color(0xFF3B82F6),
+      ),
+      _kpiCard(
+        'Sessions Conducted',
+        '$totalSessions',
+        Icons.event_available,
+        const Color(0xFF8B5CF6),
+      ),
+      _kpiCard(
+        'Defaulters (<${_threshold.toStringAsFixed(0)}%)',
+        '$totalDefaulters',
+        Icons.warning_amber_rounded,
+        totalDefaulters > 0 ? const Color(0xFFEF4444) : const Color(0xFF059669),
+      ),
     ];
 
     if (isDesktop) {
       return Row(
-        children: cards.map((c) => Expanded(child: Padding(padding: const EdgeInsets.only(right: 12), child: c))).toList(),
+        children: cards
+            .map(
+              (c) => Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.only(right: 12),
+                  child: c,
+                ),
+              ),
+            )
+            .toList(),
       );
     }
     return GridView.count(
@@ -497,12 +573,29 @@ class _AnalyticsScreenState extends State<AnalyticsScreen>
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Flexible(child: Text(title, style: TextStyle(color: Colors.grey.shade600, fontSize: 12, fontWeight: FontWeight.w600), maxLines: 1)),
+                Flexible(
+                  child: Text(
+                    title,
+                    style: TextStyle(
+                      color: Colors.grey.shade600,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
+                    maxLines: 1,
+                  ),
+                ),
                 Icon(icon, color: color, size: 20),
               ],
             ),
             const SizedBox(height: 10),
-            Text(value, style: TextStyle(color: color, fontSize: 24, fontWeight: FontWeight.bold)),
+            Text(
+              value,
+              style: TextStyle(
+                color: color,
+                fontSize: 24,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
           ],
         ),
       ),
@@ -517,8 +610,14 @@ class _AnalyticsScreenState extends State<AnalyticsScreen>
     for (int i = 0; i < _trendData.length; i++) {
       final item = _trendData[i];
       if (item is Map) {
-        final pct = (item['attendance_percentage'] ?? item['pct'] ?? item['rate'] ?? 0.0) as num;
-        final label = item['week'] ?? item['date'] ?? item['label'] ?? 'W${i + 1}';
+        final pct =
+            (item['attendance_percentage'] ??
+                    item['pct'] ??
+                    item['rate'] ??
+                    0.0)
+                as num;
+        final label =
+            item['week'] ?? item['date'] ?? item['label'] ?? 'W${i + 1}';
         spots.add(FlSpot(i.toDouble(), pct.toDouble().clamp(0, 100)));
         xLabels.add(label.toString());
       }
@@ -526,7 +625,12 @@ class _AnalyticsScreenState extends State<AnalyticsScreen>
 
     // Fallback spots if trend data is empty
     if (spots.isEmpty) {
-      spots.addAll(const [FlSpot(0, 80), FlSpot(1, 85), FlSpot(2, 78), FlSpot(3, 90)]);
+      spots.addAll(const [
+        FlSpot(0, 80),
+        FlSpot(1, 85),
+        FlSpot(2, 78),
+        FlSpot(3, 90),
+      ]);
       xLabels.addAll(['W1', 'W2', 'W3', 'W4']);
     }
 
@@ -538,9 +642,18 @@ class _AnalyticsScreenState extends State<AnalyticsScreen>
           children: [
             Row(
               children: [
-                Icon(Icons.show_chart_rounded, color: theme.primaryColor, size: 20),
+                Icon(
+                  Icons.show_chart_rounded,
+                  color: theme.primaryColor,
+                  size: 20,
+                ),
                 const SizedBox(width: 8),
-                Text('Attendance Trend Over Time', style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
+                Text(
+                  'Attendance Trend Over Time',
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
               ],
             ),
             const SizedBox(height: 24),
@@ -553,14 +666,18 @@ class _AnalyticsScreenState extends State<AnalyticsScreen>
                   gridData: FlGridData(
                     show: true,
                     drawVerticalLine: false,
-                    getDrawingHorizontalLine: (val) => FlLine(color: theme.dividerColor, strokeWidth: 1),
+                    getDrawingHorizontalLine: (val) =>
+                        FlLine(color: theme.dividerColor, strokeWidth: 1),
                   ),
                   titlesData: FlTitlesData(
                     leftTitles: AxisTitles(
                       sideTitles: SideTitles(
                         showTitles: true,
                         reservedSize: 32,
-                        getTitlesWidget: (v, meta) => Text('${v.toInt()}%', style: const TextStyle(fontSize: 10)),
+                        getTitlesWidget: (v, meta) => Text(
+                          '${v.toInt()}%',
+                          style: const TextStyle(fontSize: 10),
+                        ),
                       ),
                     ),
                     bottomTitles: AxisTitles(
@@ -571,15 +688,22 @@ class _AnalyticsScreenState extends State<AnalyticsScreen>
                           if (idx >= 0 && idx < xLabels.length) {
                             return Padding(
                               padding: const EdgeInsets.only(top: 6),
-                              child: Text(xLabels[idx], style: const TextStyle(fontSize: 10)),
+                              child: Text(
+                                xLabels[idx],
+                                style: const TextStyle(fontSize: 10),
+                              ),
                             );
                           }
                           return const SizedBox();
                         },
                       ),
                     ),
-                    rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                    topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                    rightTitles: const AxisTitles(
+                      sideTitles: SideTitles(showTitles: false),
+                    ),
+                    topTitles: const AxisTitles(
+                      sideTitles: SideTitles(showTitles: false),
+                    ),
                   ),
                   borderData: FlBorderData(show: false),
                   lineBarsData: [
@@ -606,7 +730,10 @@ class _AnalyticsScreenState extends State<AnalyticsScreen>
   }
 
   // ─── Class Comparison Bar Chart (fl_chart) ─────────────────────────────────
-  Widget _buildClassComparisonBarChart(ThemeData theme, List<dynamic> classComparisons) {
+  Widget _buildClassComparisonBarChart(
+    ThemeData theme,
+    List<dynamic> classComparisons,
+  ) {
     final barGroups = <BarChartGroupData>[];
     final labels = <String>[];
 
@@ -615,10 +742,14 @@ class _AnalyticsScreenState extends State<AnalyticsScreen>
       final c = displayList[i];
       if (c is Map) {
         final name = c['class_name']?.toString() ?? 'Class ${i + 1}';
-        final pct = ((c['attendance_percentage'] ?? c['attendance_pct'] ?? 0.0) as num).toDouble();
+        final pct =
+            ((c['attendance_percentage'] ?? c['attendance_pct'] ?? 0.0) as num)
+                .toDouble();
         labels.add(name);
 
-        final color = pct >= 85 ? const Color(0xFF059669) : (pct >= 75 ? const Color(0xFFD97706) : const Color(0xFFEF4444));
+        final color = pct >= 85
+            ? const Color(0xFF059669)
+            : (pct >= 75 ? const Color(0xFFD97706) : const Color(0xFFEF4444));
         barGroups.add(
           BarChartGroupData(
             x: i,
@@ -627,7 +758,9 @@ class _AnalyticsScreenState extends State<AnalyticsScreen>
                 toY: pct.clamp(0, 100),
                 color: color,
                 width: 18,
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(6)),
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(6),
+                ),
               ),
             ],
           ),
@@ -643,28 +776,45 @@ class _AnalyticsScreenState extends State<AnalyticsScreen>
           children: [
             Row(
               children: [
-                Icon(Icons.bar_chart_rounded, color: theme.primaryColor, size: 20),
+                Icon(
+                  Icons.bar_chart_rounded,
+                  color: theme.primaryColor,
+                  size: 20,
+                ),
                 const SizedBox(width: 8),
-                Text('Class Comparison', style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
+                Text(
+                  'Class Comparison',
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
               ],
             ),
             const SizedBox(height: 24),
             SizedBox(
               height: 220,
               child: barGroups.isEmpty
-                  ? const Center(child: Text('No class comparison data available'))
+                  ? const Center(
+                      child: Text('No class comparison data available'),
+                    )
                   : BarChart(
                       BarChartData(
                         minY: 0,
                         maxY: 100,
-                        gridData: FlGridData(show: true, drawVerticalLine: false),
+                        gridData: FlGridData(
+                          show: true,
+                          drawVerticalLine: false,
+                        ),
                         borderData: FlBorderData(show: false),
                         titlesData: FlTitlesData(
                           leftTitles: AxisTitles(
                             sideTitles: SideTitles(
                               showTitles: true,
                               reservedSize: 32,
-                              getTitlesWidget: (v, meta) => Text('${v.toInt()}%', style: const TextStyle(fontSize: 10)),
+                              getTitlesWidget: (v, meta) => Text(
+                                '${v.toInt()}%',
+                                style: const TextStyle(fontSize: 10),
+                              ),
                             ),
                           ),
                           bottomTitles: AxisTitles(
@@ -676,7 +826,9 @@ class _AnalyticsScreenState extends State<AnalyticsScreen>
                                   return Padding(
                                     padding: const EdgeInsets.only(top: 6),
                                     child: Text(
-                                      labels[idx].length > 6 ? labels[idx].substring(0, 6) : labels[idx],
+                                      labels[idx].length > 6
+                                          ? labels[idx].substring(0, 6)
+                                          : labels[idx],
                                       style: const TextStyle(fontSize: 10),
                                     ),
                                   );
@@ -685,8 +837,12 @@ class _AnalyticsScreenState extends State<AnalyticsScreen>
                               },
                             ),
                           ),
-                          rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                          topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                          rightTitles: const AxisTitles(
+                            sideTitles: SideTitles(showTitles: false),
+                          ),
+                          topTitles: const AxisTitles(
+                            sideTitles: SideTitles(showTitles: false),
+                          ),
                         ),
                         barGroups: barGroups,
                       ),
@@ -711,14 +867,28 @@ class _AnalyticsScreenState extends State<AnalyticsScreen>
               children: [
                 Row(
                   children: [
-                    const Icon(Icons.warning_amber_rounded, color: Colors.redAccent, size: 20),
+                    const Icon(
+                      Icons.warning_amber_rounded,
+                      color: Colors.redAccent,
+                      size: 20,
+                    ),
                     const SizedBox(width: 8),
-                    Text('Defaulters (<${_threshold.toStringAsFixed(0)}%)',
-                        style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
+                    Text(
+                      'Defaulters (<${_threshold.toStringAsFixed(0)}%)',
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
                   ],
                 ),
                 Chip(
-                  label: Text('${_defaultersData.length} Students', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                  label: Text(
+                    '${_defaultersData.length} Students',
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
                   backgroundColor: Colors.red.withValues(alpha: 0.1),
                   side: const BorderSide(color: Colors.redAccent),
                 ),
@@ -728,7 +898,11 @@ class _AnalyticsScreenState extends State<AnalyticsScreen>
             if (_defaultersData.isEmpty)
               const Padding(
                 padding: EdgeInsets.symmetric(vertical: 24),
-                child: Center(child: Text('🎉 No defaulters found below the selected cutoff threshold!')),
+                child: Center(
+                  child: Text(
+                    '🎉 No defaulters found below the selected cutoff threshold!',
+                  ),
+                ),
               )
             else
               ListView.separated(
@@ -738,35 +912,90 @@ class _AnalyticsScreenState extends State<AnalyticsScreen>
                 separatorBuilder: (_, __) => const Divider(height: 1),
                 itemBuilder: (context, i) {
                   final d = _defaultersData[i];
-                  final name = d['student_name'] ?? d['full_name'] ?? d['name'] ?? 'Student';
+                  final name =
+                      d['student_name'] ??
+                      d['full_name'] ??
+                      d['name'] ??
+                      'Student';
                   final roll = d['roll_number']?.toString() ?? '-';
                   final clsName = d['class_name']?.toString() ?? '-';
-                  final pct = ((d['attendance_percentage'] ?? d['pct'] ?? 0.0) as num).toDouble();
-                  final present = (d['present_count'] ?? d['present'] ?? 0) as num;
+                  final pct =
+                      ((d['attendance_percentage'] ?? d['pct'] ?? 0.0) as num)
+                          .toDouble();
+                  final present =
+                      (d['present_count'] ?? d['present'] ?? 0) as num;
                   final total = (d['total_sessions'] ?? d['total'] ?? 0) as num;
 
                   return ListTile(
                     dense: true,
+                    onTap: () {
+                      final stId = (d['student_id'] ?? d['id'] ?? '')
+                          .toString();
+                      final student = Student(
+                        id: stId,
+                        fullName: name,
+                        rollNumber: roll,
+                        classId: (d['class_id'] ?? '').toString(),
+                        admissionNumber:
+                            (d['admission_number'] ?? d['admission_no'] ?? '-')
+                                .toString(),
+                      );
+                      final totP = present.toInt();
+                      final totS = total.toInt();
+                      final totA = totS > totP ? totS - totP : 0;
+                      StudentProfileScreen.show(
+                        context,
+                        student: student,
+                        className: clsName,
+                        attendancePct: pct,
+                        totalPresent: totP,
+                        totalAbsent: totA,
+                        totalLate: 0,
+                        totalExcused: 0,
+                      );
+                    },
                     leading: CircleAvatar(
                       radius: 14,
                       backgroundColor: Colors.red.shade100,
                       child: Text(
                         name.isNotEmpty ? name[0].toUpperCase() : 'S',
-                        style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold, fontSize: 11),
+                        style: const TextStyle(
+                          color: Colors.red,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 11,
+                        ),
                       ),
                     ),
-                    title: Text(name, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
-                    subtitle: Text('Class: $clsName • Roll: $roll • $present/$total Sessions', style: const TextStyle(fontSize: 11)),
+                    title: Text(
+                      name,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w600,
+                        fontSize: 13,
+                      ),
+                    ),
+                    subtitle: Text(
+                      'Class: $clsName • Roll: $roll • $present/$total Sessions',
+                      style: const TextStyle(fontSize: 11),
+                    ),
                     trailing: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 4,
+                      ),
                       decoration: BoxDecoration(
                         color: Colors.red.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: Colors.red.withValues(alpha: 0.3)),
+                        border: Border.all(
+                          color: Colors.red.withValues(alpha: 0.3),
+                        ),
                       ),
                       child: Text(
                         '${pct.toStringAsFixed(1)}%',
-                        style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold, fontSize: 12),
+                        style: const TextStyle(
+                          color: Colors.red,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 12,
+                        ),
                       ),
                     ),
                   );
