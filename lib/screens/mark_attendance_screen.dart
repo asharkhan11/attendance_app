@@ -13,11 +13,13 @@ import '../shared/widgets/app_skeleton.dart';
 class MarkAttendanceScreen extends StatefulWidget {
   final AttendanceSession session;
   final SchoolClass schoolClass;
+  final VoidCallback? onSessionUpdated;
 
   const MarkAttendanceScreen({
     super.key,
     required this.session,
     required this.schoolClass,
+    this.onSessionUpdated,
   });
 
   @override
@@ -45,8 +47,9 @@ class _MarkAttendanceScreenState extends State<MarkAttendanceScreen> {
   void didUpdateWidget(MarkAttendanceScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.session.id != widget.session.id ||
-        oldWidget.session.sessionDate != widget.session.sessionDate) {
-      _isClosed = false;
+        oldWidget.session.sessionDate != widget.session.sessionDate ||
+        oldWidget.session.status != widget.session.status) {
+      _isClosed = widget.session.status == 'closed';
       _loadSessionRoster();
     }
   }
@@ -63,8 +66,8 @@ class _MarkAttendanceScreenState extends State<MarkAttendanceScreen> {
       final data = await _apiService.getAttendanceSession(widget.session.id);
       if (data != null) {
         final sessionData = data['session'];
-        if (sessionData != null && sessionData['status'] == 'closed') {
-          _isClosed = true;
+        if (sessionData != null) {
+          _isClosed = sessionData['status'] == 'closed';
         }
 
         final rosterList = data['roster'] as List?;
@@ -103,6 +106,7 @@ class _MarkAttendanceScreenState extends State<MarkAttendanceScreen> {
           .toList();
 
       await _apiService.markAttendance(widget.session.id, marks);
+      widget.onSessionUpdated?.call();
 
       if (mounted) {
         final attTheme = Theme.of(context).extension<AttendanceTheme>() ?? AttendanceTheme.light;
@@ -193,6 +197,7 @@ class _MarkAttendanceScreenState extends State<MarkAttendanceScreen> {
       await _submitBulkMark();
       await _apiService.closeAttendanceSession(widget.session.id);
       setState(() => _isClosed = true);
+      widget.onSessionUpdated?.call();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -308,6 +313,7 @@ class _MarkAttendanceScreenState extends State<MarkAttendanceScreen> {
                   entry.remarks = rem.isNotEmpty ? rem : null;
                 });
                 nav.pop();
+                widget.onSessionUpdated?.call();
                 if (mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(

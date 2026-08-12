@@ -21,7 +21,7 @@ class ProfileModal extends StatefulWidget {
             bottom: MediaQuery.of(context).viewInsets.bottom,
           ),
           child: SizedBox(
-            height: MediaQuery.of(context).size.height * 0.75,
+            height: 480,
             child: ProfileModal(onProfileUpdated: onProfileUpdated),
           ),
         ),
@@ -159,195 +159,283 @@ class _ProfileModalState extends State<ProfileModal>
   @override
   Widget build(BuildContext context) {
     final user = Provider.of<AuthProvider>(context).currentUser;
+    final isMobile = MediaQuery.of(context).size.width < 600;
+    final labelStyle = TextStyle(
+      fontSize: 12,
+      fontWeight: FontWeight.bold,
+      color: Theme.of(
+        context,
+      ).colorScheme.onSurfaceVariant.withValues(alpha: 0.8),
+    );
 
-    return Dialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 480, maxHeight: 580),
-        child: Padding(
-          padding: const EdgeInsets.all(20.0),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // Header with Avatar & Title
-              Row(
+    final Widget mainContent = Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        // Header with Avatar & Title
+        Row(
+          children: [
+            CircleAvatar(
+              radius: 24,
+              backgroundColor: Theme.of(context).primaryColor,
+              child: Text(
+                user?.fullName.isNotEmpty == true
+                    ? user!.fullName[0].toUpperCase()
+                    : 'U',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 18,
+                ),
+              ),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  CircleAvatar(
-                    radius: 24,
-                    backgroundColor: Theme.of(context).primaryColor,
-                    child: Text(
-                      user?.fullName.isNotEmpty == true ? user!.fullName[0].toUpperCase() : 'U',
-                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18),
+                  Text(
+                    user?.fullName ?? 'User Profile',
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
                     ),
                   ),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(user?.fullName ?? 'User Profile', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                        Text('${user?.email ?? ""} • ${user?.role.toUpperCase() ?? ""}', style: TextStyle(fontSize: 12, color: Colors.grey.shade700)),
-                      ],
-                    ),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.close),
-                    onPressed: () => Navigator.pop(context),
+                  Text(
+                    '${user?.email ?? ""} • ${user?.role.toUpperCase() ?? ""}',
+                    style: TextStyle(fontSize: 12, color: Colors.grey.shade700),
                   ),
                 ],
               ),
-              const SizedBox(height: 16),
+            ),
+            IconButton(
+              icon: const Icon(Icons.close),
+              onPressed: () => Navigator.pop(context),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
 
-              // Tab Selector
-              TabBar(
-                controller: _tabController,
-                labelColor: Theme.of(context).primaryColor,
-                unselectedLabelColor: Colors.grey.shade600,
-                indicatorColor: Theme.of(context).primaryColor,
-                tabs: const [
-                  Tab(icon: Icon(Icons.person, size: 20), text: 'My Profile'),
-                  Tab(icon: Icon(Icons.lock, size: 20), text: 'Security & Password'),
-                ],
+        // Tab Selector
+        TabBar(
+          controller: _tabController,
+          labelColor: Theme.of(context).primaryColor,
+          unselectedLabelColor: Colors.grey.shade600,
+          indicatorColor: Theme.of(context).primaryColor,
+          tabs: const [
+            Tab(icon: Icon(Icons.person, size: 20), text: 'My Profile'),
+            Tab(icon: Icon(Icons.lock, size: 20), text: 'Security & Password'),
+          ],
+        ),
+        const SizedBox(height: 16),
+
+        // Tab View Content
+        Expanded(
+          child: TabBarView(
+            controller: _tabController,
+            children: [
+              // Tab 1: Profile Info
+              SingleChildScrollView(
+                child: Form(
+                  key: _profileFormKey,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      const SizedBox(height: 8),
+                      Text('Full Name', style: labelStyle),
+                      const SizedBox(height: 6),
+                      TextFormField(
+                        controller: _nameCtrl,
+                        decoration: const InputDecoration(
+                          hintText: 'Enter your full name',
+                          prefixIcon: Icon(Icons.person_outline),
+                          border: OutlineInputBorder(),
+                        ),
+                        validator: (v) => (v == null || v.trim().length < 2)
+                            ? 'Please enter your full name'
+                            : null,
+                      ),
+                      const SizedBox(height: 16),
+                      Text('Phone Number (Optional)', style: labelStyle),
+                      const SizedBox(height: 6),
+                      TextFormField(
+                        controller: _phoneCtrl,
+                        decoration: const InputDecoration(
+                          hintText: 'Enter phone number',
+                          prefixIcon: Icon(Icons.phone_outlined),
+                          border: OutlineInputBorder(),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        'Email Address (Managed by Admin)',
+                        style: labelStyle,
+                      ),
+                      const SizedBox(height: 6),
+                      TextFormField(
+                        initialValue: user?.email ?? '',
+                        enabled: false,
+                        decoration: const InputDecoration(
+                          prefixIcon: Icon(Icons.email_outlined),
+                          border: OutlineInputBorder(),
+                        ),
+                      ),
+                      const SizedBox(height: 24),
+                      ElevatedButton.icon(
+                        icon: _isSavingProfile
+                            ? const SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(
+                                  color: Colors.white,
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : const Icon(Icons.save),
+                        label: const Text('SAVE PROFILE CHANGES'),
+                        style: ElevatedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          backgroundColor: Theme.of(context).primaryColor,
+                          foregroundColor: Colors.white,
+                        ),
+                        onPressed: _isSavingProfile ? null : _updateProfile,
+                      ),
+                      const SizedBox(height: 15),
+                    ],
+                  ),
+                ),
               ),
-              const SizedBox(height: 16),
 
-              // Tab View Content
-              Expanded(
-                child: TabBarView(
-                  controller: _tabController,
-                  children: [
-                    // Tab 1: Profile Info
-                    SingleChildScrollView(
-                      child: Form(
-                        key: _profileFormKey,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            TextFormField(
-                              controller: _nameCtrl,
-                              decoration: const InputDecoration(
-                                labelText: 'Full Name',
-                                prefixIcon: Icon(Icons.person_outline),
-                                border: OutlineInputBorder(),
-                              ),
-                              validator: (v) => (v == null || v.trim().length < 2) ? 'Please enter your full name' : null,
+              // Tab 2: Security & Password Change
+              SingleChildScrollView(
+                child: Form(
+                  key: _passwordFormKey,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      const SizedBox(height: 8),
+                      Text('Current Password', style: labelStyle),
+                      const SizedBox(height: 6),
+                      TextFormField(
+                        controller: _currentPassCtrl,
+                        obscureText: _obscureCurrent,
+                        decoration: InputDecoration(
+                          hintText: 'Enter current password',
+                          prefixIcon: const Icon(Icons.lock_outline),
+                          border: const OutlineInputBorder(),
+                          suffixIcon: IconButton(
+                            icon: Icon(
+                              _obscureCurrent
+                                  ? Icons.visibility_off
+                                  : Icons.visibility,
                             ),
-                            const SizedBox(height: 14),
-                            TextFormField(
-                              controller: _phoneCtrl,
-                              decoration: const InputDecoration(
-                                labelText: 'Phone Number (Optional)',
-                                prefixIcon: Icon(Icons.phone_outlined),
-                                border: OutlineInputBorder(),
-                              ),
+                            onPressed: () => setState(
+                              () => _obscureCurrent = !_obscureCurrent,
                             ),
-                            const SizedBox(height: 14),
-                            TextFormField(
-                              initialValue: user?.email ?? '',
-                              enabled: false,
-                              decoration: const InputDecoration(
-                                labelText: 'Email Address (Managed by Admin)',
-                                prefixIcon: Icon(Icons.email_outlined),
-                                border: OutlineInputBorder(),
-                              ),
-                            ),
-                            const SizedBox(height: 20),
-                            ElevatedButton.icon(
-                              icon: _isSavingProfile
-                                  ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                                  : const Icon(Icons.save),
-                              label: const Text('SAVE PROFILE CHANGES'),
-                              style: ElevatedButton.styleFrom(
-                                padding: const EdgeInsets.symmetric(vertical: 14),
-                                backgroundColor: Theme.of(context).primaryColor,
-                                foregroundColor: Colors.white,
-                              ),
-                              onPressed: _isSavingProfile ? null : _updateProfile,
-                            ),
-                          ],
+                          ),
                         ),
+                        validator: (v) => (v == null || v.isEmpty)
+                            ? 'Enter your current password'
+                            : null,
                       ),
-                    ),
-
-                    // Tab 2: Security & Password Change
-                    SingleChildScrollView(
-                      child: Form(
-                        key: _passwordFormKey,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            TextFormField(
-                              controller: _currentPassCtrl,
-                              obscureText: _obscureCurrent,
-                              decoration: InputDecoration(
-                                labelText: 'Current Password',
-                                prefixIcon: const Icon(Icons.lock_outline),
-                                border: const OutlineInputBorder(),
-                                suffixIcon: IconButton(
-                                  icon: Icon(_obscureCurrent ? Icons.visibility_off : Icons.visibility),
-                                  onPressed: () => setState(() => _obscureCurrent = !_obscureCurrent),
-                                ),
-                              ),
-                              validator: (v) => (v == null || v.isEmpty) ? 'Enter your current password' : null,
+                      const SizedBox(height: 16),
+                      Text('New Password (min 8 chars)', style: labelStyle),
+                      const SizedBox(height: 6),
+                      TextFormField(
+                        controller: _newPassCtrl,
+                        obscureText: _obscureNew,
+                        decoration: InputDecoration(
+                          hintText: 'Enter new password',
+                          prefixIcon: const Icon(Icons.key_outlined),
+                          border: const OutlineInputBorder(),
+                          suffixIcon: IconButton(
+                            icon: Icon(
+                              _obscureNew
+                                  ? Icons.visibility_off
+                                  : Icons.visibility,
                             ),
-                            const SizedBox(height: 14),
-                            TextFormField(
-                              controller: _newPassCtrl,
-                              obscureText: _obscureNew,
-                              decoration: InputDecoration(
-                                labelText: 'New Password (min 8 chars)',
-                                prefixIcon: const Icon(Icons.key_outlined),
-                                border: const OutlineInputBorder(),
-                                suffixIcon: IconButton(
-                                  icon: Icon(_obscureNew ? Icons.visibility_off : Icons.visibility),
-                                  onPressed: () => setState(() => _obscureNew = !_obscureNew),
-                                ),
-                              ),
-                              validator: (v) => (v == null || v.length < 8) ? 'Password must be at least 8 characters' : null,
-                            ),
-                            const SizedBox(height: 14),
-                            TextFormField(
-                              controller: _confirmPassCtrl,
-                              obscureText: _obscureConfirm,
-                              decoration: InputDecoration(
-                                labelText: 'Confirm New Password',
-                                prefixIcon: const Icon(Icons.key_outlined),
-                                border: const OutlineInputBorder(),
-                                suffixIcon: IconButton(
-                                  icon: Icon(_obscureConfirm ? Icons.visibility_off : Icons.visibility),
-                                  onPressed: () => setState(() => _obscureConfirm = !_obscureConfirm),
-                                ),
-                              ),
-                              validator: (v) {
-                                if (v != _newPassCtrl.text) {
-                                  return 'Passwords do not match';
-                                }
-                                return null;
-                              },
-                            ),
-                            const SizedBox(height: 20),
-                            ElevatedButton.icon(
-                              icon: _isChangingPassword
-                                  ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                                  : const Icon(Icons.security),
-                              label: const Text('UPDATE PASSWORD'),
-                              style: ElevatedButton.styleFrom(
-                                padding: const EdgeInsets.symmetric(vertical: 14),
-                                backgroundColor: Colors.amber.shade900,
-                                foregroundColor: Colors.white,
-                              ),
-                              onPressed: _isChangingPassword ? null : _changePassword,
-                            ),
-                          ],
+                            onPressed: () =>
+                                setState(() => _obscureNew = !_obscureNew),
+                          ),
                         ),
+                        validator: (v) => (v == null || v.length < 8)
+                            ? 'Password must be at least 8 characters'
+                            : null,
                       ),
-                    ),
-                  ],
+                      const SizedBox(height: 16),
+                      Text('Confirm New Password', style: labelStyle),
+                      const SizedBox(height: 6),
+                      TextFormField(
+                        controller: _confirmPassCtrl,
+                        obscureText: _obscureConfirm,
+                        decoration: InputDecoration(
+                          hintText: 'Confirm new password',
+                          prefixIcon: const Icon(Icons.key_outlined),
+                          border: const OutlineInputBorder(),
+                          suffixIcon: IconButton(
+                            icon: Icon(
+                              _obscureConfirm
+                                  ? Icons.visibility_off
+                                  : Icons.visibility,
+                            ),
+                            onPressed: () => setState(
+                              () => _obscureConfirm = !_obscureConfirm,
+                            ),
+                          ),
+                        ),
+                        validator: (v) {
+                          if (v != _newPassCtrl.text) {
+                            return 'Passwords do not match';
+                          }
+                          return null;
+                        },
+                      ),
+                      const SizedBox(height: 24),
+                      ElevatedButton.icon(
+                        icon: _isChangingPassword
+                            ? const SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(
+                                  color: Colors.white,
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : const Icon(Icons.security),
+                        label: const Text('UPDATE PASSWORD'),
+                        style: ElevatedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          backgroundColor: Colors.amber.shade900,
+                          foregroundColor: Colors.white,
+                        ),
+                        onPressed: _isChangingPassword ? null : _changePassword,
+                      ),
+                      const SizedBox(height: 15),
+                    ],
+                  ),
                 ),
               ),
             ],
           ),
         ),
+      ],
+    );
+
+    if (isMobile) {
+      return Material(
+        color: Theme.of(context).colorScheme.surface,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16.0, 16.0, 16.0, 0.0),
+          child: mainContent,
+        ),
+      );
+    }
+
+    return Dialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 480, maxHeight: 580),
+        child: Padding(padding: const EdgeInsets.all(20.0), child: mainContent),
       ),
     );
   }
