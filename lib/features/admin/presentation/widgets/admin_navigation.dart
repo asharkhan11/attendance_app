@@ -78,12 +78,14 @@ class AdminNavigation extends ConsumerWidget {
   }
 
   Widget _buildMobileNavigation(BuildContext context, WidgetRef ref, bool isDark) {
-    // Mobile bottom bar shows 5: Overview, Sessions, Analytics, Students, More
+    // Mobile bottom bar shows 5: Overview, Sessions, Analytics, Classes, More
     const primaryCount = 4;
     final primaryDestinations = navDestinations.take(primaryCount).toList();
     final bool isMoreSelected = selectedIndex >= primaryCount;
+    final GlobalKey<ScaffoldState> scaffoldKey = GlobalKey<ScaffoldState>();
 
     return Scaffold(
+      key: scaffoldKey,
       body: body,
       drawer: Drawer(
         child: ListView(
@@ -152,7 +154,7 @@ class AdminNavigation extends ConsumerWidget {
         selectedIndex: isMoreSelected ? primaryCount : selectedIndex,
         onDestinationSelected: (idx) {
           if (idx == primaryCount) {
-            Scaffold.of(context).openDrawer();
+            scaffoldKey.currentState?.openDrawer();
           } else {
             onDestinationSelected(idx);
           }

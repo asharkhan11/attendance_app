@@ -351,7 +351,7 @@ class _AdminOverviewScreenState extends State<AdminOverviewScreen> {
       shrinkWrap: true,
       crossAxisSpacing: 12,
       mainAxisSpacing: 12,
-      childAspectRatio: 1.5,
+      childAspectRatio: 1.15,
       physics: const NeverScrollableScrollPhysics(),
       children: kpis.map((k) => _KpiCard(data: k)).toList(),
     );
@@ -501,7 +501,7 @@ class _AdminOverviewScreenState extends State<AdminOverviewScreen> {
       shrinkWrap: true,
       crossAxisSpacing: 12,
       mainAxisSpacing: 12,
-      childAspectRatio: 2.2,
+      childAspectRatio: 1.85,
       physics: const NeverScrollableScrollPhysics(),
       children: actions.map((a) => _QuickActionCard(action: a)).toList(),
     );
@@ -533,10 +533,12 @@ class _KpiCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Card(
+      margin: EdgeInsets.zero,
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -546,25 +548,27 @@ class _KpiCard extends StatelessWidget {
                     data.label,
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
                       fontWeight: FontWeight.w600,
+                      fontSize: 11,
                     ),
-                    maxLines: 2,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
                 Container(
-                  padding: const EdgeInsets.all(6),
+                  padding: const EdgeInsets.all(4),
                   decoration: BoxDecoration(
                     color: data.color.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(8),
+                    borderRadius: BorderRadius.circular(6),
                   ),
-                  child: Icon(data.icon, size: 16, color: data.color),
+                  child: Icon(data.icon, size: 14, color: data.color),
                 ),
               ],
             ),
-            const SizedBox(height: 10),
+            const SizedBox(height: 4),
             Text(
               data.value,
               style: TextStyle(
-                fontSize: 26,
+                fontSize: 22,
                 fontWeight: FontWeight.bold,
                 color: data.color,
               ),
@@ -572,8 +576,11 @@ class _KpiCard extends StatelessWidget {
             const SizedBox(height: 2),
             Text(
               data.subtitle,
-              style: Theme.of(context).textTheme.bodySmall,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                fontSize: 10,
+              ),
               maxLines: 1,
+              overflow: TextOverflow.ellipsis,
             ),
           ],
         ),
@@ -602,36 +609,38 @@ class _QuickActionCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Card(
+      margin: EdgeInsets.zero,
       child: InkWell(
         onTap: action.onTap,
         borderRadius: BorderRadius.circular(16),
         child: Padding(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
           child: Row(
             children: [
               Container(
-                padding: const EdgeInsets.all(8),
+                padding: const EdgeInsets.all(6),
                 decoration: BoxDecoration(
                   color: action.color.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(10),
+                  borderRadius: BorderRadius.circular(8),
                 ),
-                child: Icon(action.icon, color: action.color, size: 20),
+                child: Icon(action.icon, color: action.color, size: 18),
               ),
-              const SizedBox(width: 10),
+              const SizedBox(width: 8),
               Expanded(
                 child: Text(
                   action.label,
                   style: const TextStyle(
                     fontWeight: FontWeight.w600,
-                    fontSize: 13,
+                    fontSize: 12,
                   ),
                   maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
               Icon(
                 Icons.chevron_right,
                 color: action.color.withValues(alpha: 0.6),
-                size: 18,
+                size: 16,
               ),
             ],
           ),

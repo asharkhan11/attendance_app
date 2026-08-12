@@ -1124,31 +1124,33 @@ class _ClassesTabState extends State<_ClassesTab> {
             padding: const EdgeInsets.all(12),
             child: Row(
               children: [
-                SizedBox(
-                  width: 280,
-                  child: TextField(
-                    controller: _searchCtrl,
-                    decoration: InputDecoration(
-                      labelText: 'Search Classes',
-                      hintText: 'Grade, section, teacher, phone...',
-                      border: const OutlineInputBorder(),
-                      isDense: true,
-                      suffixIcon: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          if (_searchCtrl.text.isNotEmpty)
-                            IconButton(
-                              icon: const Icon(Icons.clear, size: 18),
-                              onPressed: () {
-                                _searchCtrl.clear();
-                                setState(() => _page = 1);
-                              },
-                            ),
-                          const Icon(Icons.search, size: 20),
-                        ],
+                Expanded(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 280),
+                    child: TextField(
+                      controller: _searchCtrl,
+                      decoration: InputDecoration(
+                        labelText: 'Search Classes',
+                        hintText: 'Grade, section, teacher, phone...',
+                        border: const OutlineInputBorder(),
+                        isDense: true,
+                        suffixIcon: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            if (_searchCtrl.text.isNotEmpty)
+                              IconButton(
+                                icon: const Icon(Icons.clear, size: 18),
+                                onPressed: () {
+                                  _searchCtrl.clear();
+                                  setState(() => _page = 1);
+                                },
+                              ),
+                            const Icon(Icons.search, size: 20),
+                          ],
+                        ),
                       ),
+                      onChanged: (_) => setState(() => _page = 1),
                     ),
-                    onChanged: (_) => setState(() => _page = 1),
                   ),
                 ),
               ],
@@ -1631,73 +1633,173 @@ class _TeachersTabState extends State<_TeachersTab> {
             ),
           Padding(
             padding: const EdgeInsets.all(12),
-            child: Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              alignment: WrapAlignment.spaceBetween,
-              crossAxisAlignment: WrapCrossAlignment.center,
-              children: [
-                SizedBox(
-                  width: 250,
-                  child: TextField(
-                    controller: _searchCtrl,
-                    decoration: InputDecoration(
-                      labelText: 'Search Teachers',
-                      hintText: 'Name, email, phone...',
-                      border: const OutlineInputBorder(),
-                      isDense: true,
-                      suffixIcon: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          if (_searchCtrl.text.isNotEmpty)
-                            IconButton(
-                              icon: const Icon(Icons.clear, size: 18),
-                              onPressed: () {
-                                _searchCtrl.clear();
-                                setState(() => _page = 1);
-                              },
+            child: context.isMobile
+                ? Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: _searchCtrl,
+                          decoration: InputDecoration(
+                            labelText: 'Search Teachers',
+                            hintText: 'Name, email, phone...',
+                            border: const OutlineInputBorder(),
+                            isDense: true,
+                            prefixIcon: const Icon(Icons.search, size: 20),
+                            suffixIcon: _searchCtrl.text.isNotEmpty
+                                ? IconButton(
+                                    icon: const Icon(Icons.clear, size: 18),
+                                    onPressed: () {
+                                      _searchCtrl.clear();
+                                      setState(() => _page = 1);
+                                    },
+                                  )
+                                : null,
+                          ),
+                          onChanged: (_) => setState(() => _page = 1),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      PopupMenuButton<String>(
+                        icon: Container(
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: Theme.of(
+                              context,
+                            ).primaryColor.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                              color: Theme.of(
+                                context,
+                              ).primaryColor.withValues(alpha: 0.3),
                             ),
-                          const Icon(Icons.search, size: 20),
+                          ),
+                          child: Icon(
+                            Icons.more_vert,
+                            color: Theme.of(context).primaryColor,
+                            size: 20,
+                          ),
+                        ),
+                        tooltip: 'CSV Actions',
+                        onSelected: (val) async {
+                          if (val == 'download') {
+                            try {
+                              final file = await widget.api
+                                  .downloadTeacherTemplate();
+                              triggerDownload(
+                                file.bytes,
+                                file.fileName ?? 'teachers_template.csv',
+                                'text/csv',
+                              );
+                              widget.snack(
+                                'Teacher template downloaded',
+                                error: false,
+                              );
+                            } catch (e) {
+                              widget.snack('Failed to download template: $e');
+                            }
+                          } else if (val == 'import' && !isArchived) {
+                            _bulkImportTeachers();
+                          }
+                        },
+                        itemBuilder: (ctx) => [
+                          const PopupMenuItem(
+                            value: 'download',
+                            child: Row(
+                              children: [
+                                Icon(
+                                  Icons.download,
+                                  size: 18,
+                                  color: Colors.blue,
+                                ),
+                                SizedBox(width: 8),
+                                Text('Download CSV Template'),
+                              ],
+                            ),
+                          ),
+                          if (!isArchived)
+                            const PopupMenuItem(
+                              value: 'import',
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    Icons.upload_file,
+                                    size: 18,
+                                    color: Colors.green,
+                                  ),
+                                  SizedBox(width: 8),
+                                  Text('Bulk CSV Import'),
+                                ],
+                              ),
+                            ),
                         ],
                       ),
-                    ),
-                    onChanged: (_) => setState(() => _page = 1),
+                    ],
+                  )
+                : Row(
+                    children: [
+                      Expanded(
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 280),
+                          child: TextField(
+                            controller: _searchCtrl,
+                            decoration: InputDecoration(
+                              labelText: 'Search Teachers',
+                              hintText: 'Name, email, phone...',
+                              border: const OutlineInputBorder(),
+                              isDense: true,
+                              suffixIcon: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  if (_searchCtrl.text.isNotEmpty)
+                                    IconButton(
+                                      icon: const Icon(Icons.clear, size: 18),
+                                      onPressed: () {
+                                        _searchCtrl.clear();
+                                        setState(() => _page = 1);
+                                      },
+                                    ),
+                                  const Icon(Icons.search, size: 20),
+                                ],
+                              ),
+                            ),
+                            onChanged: (_) => setState(() => _page = 1),
+                          ),
+                        ),
+                      ),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          ElevatedButton.icon(
+                            icon: const Icon(Icons.download, size: 16),
+                            label: const Text('Download Teacher Template CSV'),
+                            onPressed: () async {
+                              try {
+                                final file = await widget.api
+                                    .downloadTeacherTemplate();
+                                triggerDownload(
+                                  file.bytes,
+                                  file.fileName ?? 'teachers_template.csv',
+                                  'text/csv',
+                                );
+                                widget.snack(
+                                  'Teacher template downloaded',
+                                  error: false,
+                                );
+                              } catch (e) {
+                                widget.snack('Failed to download template: $e');
+                              }
+                            },
+                          ),
+                          ElevatedButton.icon(
+                            icon: const Icon(Icons.upload_file, size: 16),
+                            label: const Text('CSV Import'),
+                            onPressed: isArchived ? null : _bulkImportTeachers,
+                          ),
+                        ],
+                      ),
+                    ],
                   ),
-                ),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    ElevatedButton.icon(
-                      icon: const Icon(Icons.download, size: 16),
-                      label: const Text('Download Teacher Template CSV'),
-                      onPressed: () async {
-                        try {
-                          final file = await widget.api
-                              .downloadTeacherTemplate();
-                          triggerDownload(
-                            file.bytes,
-                            file.fileName ?? 'teachers_template.csv',
-                            'text/csv',
-                          );
-                          widget.snack(
-                            'Teacher template downloaded',
-                            error: false,
-                          );
-                        } catch (e) {
-                          widget.snack('Failed to download template: $e');
-                        }
-                      },
-                    ),
-                    ElevatedButton.icon(
-                      icon: const Icon(Icons.upload_file, size: 16),
-                      label: const Text('CSV Import'),
-                      onPressed: isArchived ? null : _bulkImportTeachers,
-                    ),
-                  ],
-                ),
-              ],
-            ),
           ),
           Expanded(
             child: filteredTeachers.isEmpty
@@ -2580,96 +2682,230 @@ class _StudentsTabState extends State<_StudentsTab> {
           // Filters
           Padding(
             padding: const EdgeInsets.all(12),
-            child: Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              crossAxisAlignment: WrapCrossAlignment.center,
-              children: [
-                SizedBox(
-                  width: 220,
-                  child: SearchableDropdown<SchoolClass?>(
-                    value: _filterClass,
-                    labelText: 'Filter by Class',
-                    isDense: true,
-                    items: [null, ...widget.classes],
-                    itemAsString: (c) => c == null ? 'No Class' : c.displayName,
-                    onChanged: (v) {
-                      setState(() {
-                        _filterClass = v;
-                        _page = 1;
-                      });
-                      _loadStudents();
-                    },
-                  ),
-                ),
-                SizedBox(
-                  width: 220,
-                  child: TextField(
-                    controller: _searchCtrl,
-                    onChanged: (_) {
-                      setState(() {
-                        _page = 1;
-                      });
-                      _loadStudents();
-                    },
-                    decoration: InputDecoration(
-                      labelText: 'Search',
-                      border: const OutlineInputBorder(),
-                      isDense: true,
-                      suffixIcon: Row(
-                        mainAxisSize: MainAxisSize.min,
+            child: context.isMobile
+                ? Column(
+                    children: [
+                      SearchableDropdown<SchoolClass?>(
+                        value: _filterClass,
+                        labelText: 'Filter by Class',
+                        isDense: true,
+                        items: [null, ...widget.classes],
+                        itemAsString: (c) =>
+                            c == null ? 'All Classes' : c.displayName,
+                        onChanged: (v) {
+                          setState(() {
+                            _filterClass = v;
+                            _page = 1;
+                          });
+                          _loadStudents();
+                        },
+                      ),
+                      const SizedBox(height: 8),
+                      Row(
                         children: [
-                          if (_searchCtrl.text.isNotEmpty)
-                            IconButton(
-                              icon: const Icon(Icons.clear, size: 18),
-                              onPressed: () {
-                                _searchCtrl.clear();
-                                setState(() {
-                                  _page = 1;
-                                });
+                          Expanded(
+                            child: TextField(
+                              controller: _searchCtrl,
+                              onChanged: (_) {
+                                setState(() => _page = 1);
+                                _loadStudents();
+                              },
+                              decoration: InputDecoration(
+                                labelText: 'Search Students',
+                                hintText: 'Name, admission no, roll no...',
+                                border: const OutlineInputBorder(),
+                                isDense: true,
+                                prefixIcon: const Icon(Icons.search, size: 20),
+                                suffixIcon: _searchCtrl.text.isNotEmpty
+                                    ? IconButton(
+                                        icon: const Icon(Icons.clear, size: 18),
+                                        onPressed: () {
+                                          _searchCtrl.clear();
+                                          setState(() => _page = 1);
+                                          _loadStudents();
+                                        },
+                                      )
+                                    : null,
+                              ),
+                              onSubmitted: (_) {
+                                _page = 1;
                                 _loadStudents();
                               },
                             ),
-                          IconButton(
-                            icon: const Icon(Icons.search),
-                            onPressed: () {
-                              _page = 1;
-                              _loadStudents();
+                          ),
+                          const SizedBox(width: 8),
+                          PopupMenuButton<String>(
+                            icon: Container(
+                              padding: const EdgeInsets.all(10),
+                              decoration: BoxDecoration(
+                                color: Theme.of(
+                                  context,
+                                ).primaryColor.withValues(alpha: 0.1),
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(
+                                  color: Theme.of(
+                                    context,
+                                  ).primaryColor.withValues(alpha: 0.3),
+                                ),
+                              ),
+                              child: Icon(
+                                Icons.more_vert,
+                                color: Theme.of(context).primaryColor,
+                                size: 20,
+                              ),
+                            ),
+                            tooltip: 'CSV Actions',
+                            onSelected: (val) async {
+                              if (val == 'download') {
+                                try {
+                                  final file = await widget.api
+                                      .downloadStudentTemplate();
+                                  triggerDownload(
+                                    file.bytes,
+                                    file.fileName ?? 'students_template.csv',
+                                    'text/csv',
+                                  );
+                                  widget.snack(
+                                    'Template downloaded',
+                                    error: false,
+                                  );
+                                } catch (e) {
+                                  widget.snack(
+                                    'Failed to download template: $e',
+                                  );
+                                }
+                              } else if (val == 'import' && !isArchived) {
+                                _bulkImport();
+                              }
                             },
+                            itemBuilder: (ctx) => [
+                              const PopupMenuItem(
+                                value: 'download',
+                                child: Row(
+                                  children: [
+                                    Icon(
+                                      Icons.download,
+                                      size: 18,
+                                      color: Colors.blue,
+                                    ),
+                                    SizedBox(width: 8),
+                                    Text('Download CSV Template'),
+                                  ],
+                                ),
+                              ),
+                              if (!isArchived)
+                                const PopupMenuItem(
+                                  value: 'import',
+                                  child: Row(
+                                    children: [
+                                      Icon(
+                                        Icons.upload_file,
+                                        size: 18,
+                                        color: Colors.green,
+                                      ),
+                                      SizedBox(width: 8),
+                                      Text('Bulk CSV Import'),
+                                    ],
+                                  ),
+                                ),
+                            ],
                           ),
                         ],
                       ),
-                    ),
-                    onSubmitted: (_) {
-                      _page = 1;
-                      _loadStudents();
-                    },
+                    ],
+                  )
+                : Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [
+                      SizedBox(
+                        width: 220,
+                        child: SearchableDropdown<SchoolClass?>(
+                          value: _filterClass,
+                          labelText: 'Filter by Class',
+                          isDense: true,
+                          items: [null, ...widget.classes],
+                          itemAsString: (c) =>
+                              c == null ? 'All Classes' : c.displayName,
+                          onChanged: (v) {
+                            setState(() {
+                              _filterClass = v;
+                              _page = 1;
+                            });
+                            _loadStudents();
+                          },
+                        ),
+                      ),
+                      SizedBox(
+                        width: 220,
+                        child: TextField(
+                          controller: _searchCtrl,
+                          onChanged: (_) {
+                            setState(() {
+                              _page = 1;
+                            });
+                            _loadStudents();
+                          },
+                          decoration: InputDecoration(
+                            labelText: 'Search',
+                            border: const OutlineInputBorder(),
+                            isDense: true,
+                            suffixIcon: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                if (_searchCtrl.text.isNotEmpty)
+                                  IconButton(
+                                    icon: const Icon(Icons.clear, size: 18),
+                                    onPressed: () {
+                                      _searchCtrl.clear();
+                                      setState(() {
+                                        _page = 1;
+                                      });
+                                      _loadStudents();
+                                    },
+                                  ),
+                                IconButton(
+                                  icon: const Icon(Icons.search),
+                                  onPressed: () {
+                                    _page = 1;
+                                    _loadStudents();
+                                  },
+                                ),
+                              ],
+                            ),
+                          ),
+                          onSubmitted: (_) {
+                            _page = 1;
+                            _loadStudents();
+                          },
+                        ),
+                      ),
+                      ElevatedButton.icon(
+                        icon: const Icon(Icons.download, size: 18),
+                        label: const Text('Download Template CSV'),
+                        onPressed: () async {
+                          try {
+                            final file = await widget.api
+                                .downloadStudentTemplate();
+                            triggerDownload(
+                              file.bytes,
+                              file.fileName ?? 'students_template.csv',
+                              'text/csv',
+                            );
+                            widget.snack('Template downloaded', error: false);
+                          } catch (e) {
+                            widget.snack('Failed to download template: $e');
+                          }
+                        },
+                      ),
+                      ElevatedButton.icon(
+                        icon: const Icon(Icons.upload_file, size: 18),
+                        label: const Text('CSV Import'),
+                        onPressed: isArchived ? null : _bulkImport,
+                      ),
+                    ],
                   ),
-                ),
-                ElevatedButton.icon(
-                  icon: const Icon(Icons.download, size: 18),
-                  label: const Text('Download Template CSV'),
-                  onPressed: () async {
-                    try {
-                      final file = await widget.api.downloadStudentTemplate();
-                      triggerDownload(
-                        file.bytes,
-                        file.fileName ?? 'students_template.csv',
-                        'text/csv',
-                      );
-                      widget.snack('Template downloaded', error: false);
-                    } catch (e) {
-                      widget.snack('Failed to download template: $e');
-                    }
-                  },
-                ),
-                ElevatedButton.icon(
-                  icon: const Icon(Icons.upload_file, size: 18),
-                  label: const Text('CSV Import'),
-                  onPressed: isArchived ? null : _bulkImport,
-                ),
-              ],
-            ),
           ),
           // Student list
           Expanded(
@@ -2978,8 +3214,10 @@ class _ReportsTabState extends State<_ReportsTab> {
                     runSpacing: 12,
                     crossAxisAlignment: WrapCrossAlignment.center,
                     children: [
-                      SizedBox(
-                        width: 260,
+                      ConstrainedBox(
+                        constraints: BoxConstraints(
+                          maxWidth: context.isMobile ? double.infinity : 260,
+                        ),
                         child: DropdownButtonFormField<String>(
                           initialValue: _reportType,
                           isExpanded: true,
@@ -3027,8 +3265,10 @@ class _ReportsTabState extends State<_ReportsTab> {
                         ),
                       ),
                       if (_reportType != 'audit_log')
-                        SizedBox(
-                          width: 200,
+                        ConstrainedBox(
+                          constraints: BoxConstraints(
+                            maxWidth: context.isMobile ? double.infinity : 200,
+                          ),
                           child: SearchableDropdown<SchoolClass?>(
                             value: _selectedClass,
                             labelText: 'Class',
@@ -3046,61 +3286,122 @@ class _ReportsTabState extends State<_ReportsTab> {
                           ),
                         ),
                       if (_reportType == 'matrix') ...[
-                        SizedBox(
-                          width: 90,
-                          child: DropdownButtonFormField<int>(
-                            initialValue: _selectedMonth,
-                            decoration: const InputDecoration(
-                              labelText: 'Month',
-                              border: OutlineInputBorder(),
-                              isDense: true,
-                            ),
-                            items: List.generate(
-                              12,
-                              (i) => DropdownMenuItem(
-                                value: i + 1,
-                                child: Text('${i + 1}'),
+                        if (context.isMobile)
+                          Row(
+                            children: [
+                              Expanded(
+                                child: DropdownButtonFormField<int>(
+                                  initialValue: _selectedMonth,
+                                  decoration: const InputDecoration(
+                                    labelText: 'Month',
+                                    border: OutlineInputBorder(),
+                                    isDense: true,
+                                  ),
+                                  items: List.generate(
+                                    12,
+                                    (i) => DropdownMenuItem(
+                                      value: i + 1,
+                                      child: Text('${i + 1}'),
+                                    ),
+                                  ),
+                                  onChanged: (v) {
+                                    if (v != null) {
+                                      setState(() => _selectedMonth = v);
+                                      _loadPreview();
+                                    }
+                                  },
+                                ),
                               ),
-                            ),
-                            onChanged: (v) {
-                              if (v != null) {
-                                setState(() => _selectedMonth = v);
-                                _loadPreview();
-                              }
-                            },
-                          ),
-                        ),
-                        SizedBox(
-                          width: 100,
-                          child: DropdownButtonFormField<int>(
-                            initialValue: _selectedYear,
-                            decoration: const InputDecoration(
-                              labelText: 'Year',
-                              border: OutlineInputBorder(),
-                              isDense: true,
-                            ),
-                            items: const [
-                              DropdownMenuItem(
-                                value: 2025,
-                                child: Text('2025'),
-                              ),
-                              DropdownMenuItem(
-                                value: 2026,
-                                child: Text('2026'),
-                              ),
-                              DropdownMenuItem(
-                                value: 2027,
-                                child: Text('2027'),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: DropdownButtonFormField<int>(
+                                  initialValue: _selectedYear,
+                                  decoration: const InputDecoration(
+                                    labelText: 'Year',
+                                    border: OutlineInputBorder(),
+                                    isDense: true,
+                                  ),
+                                  items: const [
+                                    DropdownMenuItem(
+                                      value: 2025,
+                                      child: Text('2025'),
+                                    ),
+                                    DropdownMenuItem(
+                                      value: 2026,
+                                      child: Text('2026'),
+                                    ),
+                                    DropdownMenuItem(
+                                      value: 2027,
+                                      child: Text('2027'),
+                                    ),
+                                  ],
+                                  onChanged: (v) {
+                                    if (v != null) {
+                                      setState(() => _selectedYear = v);
+                                      _loadPreview();
+                                    }
+                                  },
+                                ),
                               ),
                             ],
-                            onChanged: (v) {
-                              if (v != null) {
-                                setState(() => _selectedYear = v);
-                                _loadPreview();
-                              }
-                            },
+                          )
+                        else ...[
+                          SizedBox(
+                            width: 90,
+                            child: DropdownButtonFormField<int>(
+                              initialValue: _selectedMonth,
+                              decoration: const InputDecoration(
+                                labelText: 'Month',
+                                border: OutlineInputBorder(),
+                                isDense: true,
+                              ),
+                              items: List.generate(
+                                12,
+                                (i) => DropdownMenuItem(
+                                  value: i + 1,
+                                  child: Text('${i + 1}'),
+                                ),
+                              ),
+                              onChanged: (v) {
+                                if (v != null) {
+                                  setState(() => _selectedMonth = v);
+                                  _loadPreview();
+                                }
+                              },
+                            ),
                           ),
-                        ),
+                          SizedBox(
+                            width: 100,
+                            child: DropdownButtonFormField<int>(
+                              initialValue: _selectedYear,
+                              decoration: const InputDecoration(
+                                labelText: 'Year',
+                                border: OutlineInputBorder(),
+                                isDense: true,
+                              ),
+                              items: const [
+                                DropdownMenuItem(
+                                  value: 2025,
+                                  child: Text('2025'),
+                                ),
+                                DropdownMenuItem(
+                                  value: 2026,
+                                  child: Text('2026'),
+                                ),
+                                DropdownMenuItem(
+                                  value: 2027,
+                                  child: Text('2027'),
+                                ),
+                              ],
+                              onChanged: (v) {
+                                if (v != null) {
+                                  setState(() => _selectedYear = v);
+                                  _loadPreview();
+                                }
+                              },
+                            ),
+                          ),
+                        ],
                       ],
                       if (_reportType == 'defaulters')
                         SizedBox(
@@ -3268,6 +3569,24 @@ class _ReportsTabState extends State<_ReportsTab> {
     );
   }
 
+  Widget _statChip(String label, MaterialColor color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: color.shade100,
+        borderRadius: BorderRadius.circular(4),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          fontSize: 10,
+          fontWeight: FontWeight.bold,
+          color: color.shade900,
+        ),
+      ),
+    );
+  }
+
   Widget _buildMatrixPreview(dynamic data) {
     if (data is! Map) {
       return const Card(
@@ -3281,6 +3600,118 @@ class _ReportsTabState extends State<_ReportsTab> {
     final className = data['class_name'] ?? 'Class';
     final daysInMonth = (data['days_in_month'] as num?)?.toInt() ?? 30;
     final students = (data['students'] as List?) ?? [];
+    final isMobile = context.isMobile;
+
+    if (isMobile) {
+      return Card(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Expanded(
+                    child: Text(
+                      '$className (${data['month']}/${data['year']})',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 15,
+                      ),
+                    ),
+                  ),
+                  Text(
+                    'Students: ${students.length}',
+                    style: TextStyle(color: Colors.grey.shade700, fontSize: 12),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              Wrap(
+                spacing: 8,
+                runSpacing: 6,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  const Text(
+                    'Key:',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11),
+                  ),
+                  _matrixLegendChip('P', 'Present', Colors.green),
+                  _matrixLegendChip('A', 'Absent', Colors.red),
+                  _matrixLegendChip('L', 'Late', Colors.orange),
+                ],
+              ),
+              const SizedBox(height: 12),
+              ListView.separated(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                itemCount: students.length,
+                separatorBuilder: (_, _) => const Divider(height: 1),
+                itemBuilder: (_, idx) {
+                  final st = students[idx];
+                  final roll = st['roll_number']?.toString() ?? '';
+                  final name = st['full_name']?.toString() ?? '';
+                  final pCount = (st['total_present'] as num?)?.toInt() ?? 0;
+                  final aCount = (st['total_absent'] as num?)?.toInt() ?? 0;
+                  final lCount = (st['total_late'] as num?)?.toInt() ?? 0;
+                  final total = pCount + aCount + lCount;
+                  final pct = total > 0 ? (pCount / total * 100) : 0.0;
+
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    child: Row(
+                      children: [
+                        CircleAvatar(
+                          radius: 16,
+                          child: Text(
+                            roll.isNotEmpty ? roll : '?',
+                            style: const TextStyle(fontSize: 11),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                name,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 13,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Row(
+                                children: [
+                                  _statChip('P: $pCount', Colors.green),
+                                  const SizedBox(width: 6),
+                                  _statChip('A: $aCount', Colors.red),
+                                  const SizedBox(width: 6),
+                                  _statChip('L: $lCount', Colors.orange),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                        Text(
+                          '${pct.toStringAsFixed(0)}%',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 15,
+                            color: pct >= 75 ? Colors.green : Colors.red,
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              ),
+            ],
+          ),
+        ),
+      );
+    }
 
     return Card(
       child: Padding(
@@ -3544,6 +3975,75 @@ class _ReportsTabState extends State<_ReportsTab> {
 
   Widget _buildDefaultersPreview(dynamic data) {
     final list = data is List ? data : [];
+    final isMobile = context.isMobile;
+
+    if (isMobile) {
+      return Card(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Defaulters Preview (${list.length} Students)',
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+              ),
+              const SizedBox(height: 12),
+              if (list.isEmpty)
+                const Text('No defaulters found in this range.')
+              else
+                ListView.separated(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  itemCount: list.length,
+                  separatorBuilder: (_, _) => const Divider(height: 1),
+                  itemBuilder: (_, i) {
+                    final d = list[i];
+                    final pct =
+                        (d['attendance_pct'] as num?)?.toDouble() ?? 0.0;
+                    return ListTile(
+                      dense: true,
+                      contentPadding: EdgeInsets.zero,
+                      leading: CircleAvatar(
+                        radius: 16,
+                        backgroundColor: pct < 50
+                            ? Colors.red.shade100
+                            : Colors.orange.shade100,
+                        child: Text(
+                          d['roll_number']?.toString() ?? '?',
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: pct < 50
+                                ? Colors.red.shade900
+                                : Colors.orange.shade900,
+                          ),
+                        ),
+                      ),
+                      title: Text(
+                        d['full_name']?.toString() ?? '',
+                        style: const TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                      subtitle: Text(
+                        '${d['class_name'] ?? ''} • ${d['guardian_phone'] ?? '-'}',
+                        style: const TextStyle(fontSize: 11),
+                      ),
+                      trailing: Text(
+                        '${pct.toStringAsFixed(1)}%',
+                        style: TextStyle(
+                          color: pct < 50 ? Colors.red : Colors.orange,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14,
+                        ),
+                      ),
+                    );
+                  },
+                ),
+            ],
+          ),
+        ),
+      );
+    }
+
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -3610,6 +4110,74 @@ class _ReportsTabState extends State<_ReportsTab> {
 
   Widget _buildAuditLogPreview(dynamic data) {
     final list = data is List ? data : [];
+    final isMobile = context.isMobile;
+
+    if (isMobile) {
+      return Card(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Audit Log Exception Preview (${list.length} Modifications)',
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+              ),
+              const SizedBox(height: 12),
+              if (list.isEmpty)
+                const Text(
+                  'No attendance modifications logged in this date range.',
+                )
+              else
+                ListView.separated(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  itemCount: list.length,
+                  separatorBuilder: (_, _) => const Divider(height: 1),
+                  itemBuilder: (_, i) {
+                    final l = list[i];
+                    final oldStat = l['old_status'] ?? '-';
+                    final newStat = l['new_status'] ?? '';
+                    final dateStr = (l['session_date'] as String? ?? '').split('T')[0];
+                    return ListTile(
+                      dense: true,
+                      contentPadding: EdgeInsets.zero,
+                      leading: const Icon(Icons.edit_note, color: Colors.purple),
+                      title: Text(
+                        '${l['student_name'] ?? ''} (${l['class_name'] ?? ''})',
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                      ),
+                      subtitle: Text(
+                        '$dateStr • Changed by: ${l['changed_by_name'] ?? ''}',
+                        style: const TextStyle(fontSize: 11),
+                      ),
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            oldStat,
+                            style: const TextStyle(color: Colors.red, fontSize: 12),
+                          ),
+                          const Icon(Icons.arrow_forward, size: 12, color: Colors.grey),
+                          Text(
+                            newStat,
+                            style: const TextStyle(
+                              color: Colors.green,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+            ],
+          ),
+        ),
+      );
+    }
+
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -4076,48 +4644,88 @@ class _AcademicSessionsTabState extends State<_AcademicSessionsTab> {
             ),
             child: Padding(
               padding: const EdgeInsets.all(16),
-              child: Row(
-                children: [
-                  Icon(
-                    Icons.school,
-                    size: 36,
-                    color: Theme.of(context).primaryColor,
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Column(
+              child: context.isMobile
+                  ? Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          'Academic Sessions & Year Management',
-                          style: Theme.of(context).textTheme.titleLarge
-                              ?.copyWith(fontWeight: FontWeight.bold),
+                        Row(
+                          children: [
+                            Icon(
+                              Icons.school,
+                              size: 32,
+                              color: Theme.of(context).primaryColor,
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Text(
+                                'Academic Sessions',
+                                style: Theme.of(context).textTheme.titleMedium
+                                    ?.copyWith(fontWeight: FontWeight.bold),
+                              ),
+                            ),
+                          ],
                         ),
-                        const SizedBox(height: 4),
+                        const SizedBox(height: 8),
                         Text(
-                          'Manage school academic sessions, duplicate class structures, copy staff assignments, and handle student movement or promotions.',
+                          'Manage school academic sessions, duplicate class structures, and handle promotions.',
                           style: TextStyle(
                             color: Colors.grey.shade700,
-                            fontSize: 13,
+                            fontSize: 12,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        SizedBox(
+                          width: double.infinity,
+                          child: ElevatedButton.icon(
+                            icon: const Icon(Icons.add),
+                            label: const Text('Create New Session'),
+                            onPressed: _showCreateYearDialog,
                           ),
                         ),
                       ],
+                    )
+                  : Row(
+                      children: [
+                        Icon(
+                          Icons.school,
+                          size: 36,
+                          color: Theme.of(context).primaryColor,
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Academic Sessions & Year Management',
+                                style: Theme.of(context).textTheme.titleLarge
+                                    ?.copyWith(fontWeight: FontWeight.bold),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                'Manage school academic sessions, duplicate class structures, copy staff assignments, and handle student movement or promotions.',
+                                style: TextStyle(
+                                  color: Colors.grey.shade700,
+                                  fontSize: 13,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        ElevatedButton.icon(
+                          icon: const Icon(Icons.add),
+                          label: const Text('Create New Session'),
+                          style: ElevatedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 12,
+                            ),
+                          ),
+                          onPressed: _showCreateYearDialog,
+                        ),
+                      ],
                     ),
-                  ),
-                  const SizedBox(width: 16),
-                  ElevatedButton.icon(
-                    icon: const Icon(Icons.add),
-                    label: const Text('Create New Session'),
-                    style: ElevatedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 12,
-                      ),
-                    ),
-                    onPressed: _showCreateYearDialog,
-                  ),
-                ],
-              ),
             ),
           ),
           const SizedBox(height: 24),
@@ -4144,7 +4752,7 @@ class _AcademicSessionsTabState extends State<_AcademicSessionsTab> {
               children: widget.years.map((y) {
                 final isSelected = widget.selectedYear?.id == y.id;
                 return Container(
-                  width: 290,
+                  width: context.isMobile ? double.infinity : 290,
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
                     color: isSelected
@@ -4206,7 +4814,7 @@ class _AcademicSessionsTabState extends State<_AcademicSessionsTab> {
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        'Period: ${y.startDate} to ${y.endDate}',
+                        'Period: ${y.startDate.split('T')[0]} to ${y.endDate.split('T')[0]}',
                         style: TextStyle(
                           fontSize: 12,
                           color: Colors.grey.shade700,
@@ -4489,16 +5097,16 @@ class _AcademicSessionsTabState extends State<_AcademicSessionsTab> {
                 ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
               ),
               SegmentedButton<int>(
-                segments: const [
+                segments: [
                   ButtonSegment<int>(
                     value: 0,
-                    label: Text('Move (Same Session)'),
-                    icon: Icon(Icons.swap_horiz, size: 16),
+                    label: Text(context.isMobile ? 'Move' : 'Move (Same Session)'),
+                    icon: const Icon(Icons.swap_horiz, size: 16),
                   ),
                   ButtonSegment<int>(
                     value: 1,
-                    label: Text('Promote (Cross Session)'),
-                    icon: Icon(Icons.school, size: 16),
+                    label: Text(context.isMobile ? 'Promote' : 'Promote (Cross Session)'),
+                    icon: const Icon(Icons.school, size: 16),
                   ),
                 ],
                 selected: {_studentOperationMode},
@@ -4522,8 +5130,10 @@ class _AcademicSessionsTabState extends State<_AcademicSessionsTab> {
               runSpacing: 12,
               crossAxisAlignment: WrapCrossAlignment.center,
               children: [
-                SizedBox(
-                  width: 250,
+                ConstrainedBox(
+                  constraints: BoxConstraints(
+                    maxWidth: context.isMobile ? double.infinity : 250,
+                  ),
                   child: SearchableDropdown<SchoolClass>(
                     value: _moveSourceClass,
                     labelText: 'Source Class (Current Session)',
@@ -4537,8 +5147,10 @@ class _AcademicSessionsTabState extends State<_AcademicSessionsTab> {
                   ),
                 ),
                 const Icon(Icons.arrow_forward),
-                SizedBox(
-                  width: 250,
+                ConstrainedBox(
+                  constraints: BoxConstraints(
+                    maxWidth: context.isMobile ? double.infinity : 250,
+                  ),
                   child: SearchableDropdown<SchoolClass>(
                     value: _moveTargetClass,
                     labelText: 'Target Class (Current Session)',
@@ -5264,38 +5876,77 @@ class _SchoolDaysTabState extends State<_SchoolDaysTab> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Row(
-                        children: const [
-                          Icon(Icons.view_week, color: Colors.indigo),
-                          SizedBox(width: 8),
-                          Text(
-                            'Weekly Working Days Configuration',
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ],
-                      ),
-                      ElevatedButton.icon(
-                        icon: _savingWeekly
-                            ? const SizedBox(
-                                width: 14,
-                                height: 14,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: Colors.white,
+                  context.isMobile
+                      ? Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: const [
+                                Icon(Icons.view_week, color: Colors.indigo),
+                                SizedBox(width: 8),
+                                Text(
+                                  'Weekly Working Days',
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.bold,
+                                  ),
                                 ),
-                              )
-                            : const Icon(Icons.save, size: 18),
-                        label: const Text('Save Weekly Schedule'),
-                        onPressed: _savingWeekly ? null : _saveWeeklySchedule,
-                      ),
-                    ],
-                  ),
+                              ],
+                            ),
+                            const SizedBox(height: 8),
+                            SizedBox(
+                              width: double.infinity,
+                              child: ElevatedButton.icon(
+                                icon: _savingWeekly
+                                    ? const SizedBox(
+                                        width: 14,
+                                        height: 14,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                          color: Colors.white,
+                                        ),
+                                      )
+                                    : const Icon(Icons.save, size: 18),
+                                label: const Text('Save Weekly Schedule'),
+                                onPressed:
+                                    _savingWeekly ? null : _saveWeeklySchedule,
+                              ),
+                            ),
+                          ],
+                        )
+                      : Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Row(
+                              children: const [
+                                Icon(Icons.view_week, color: Colors.indigo),
+                                SizedBox(width: 8),
+                                Text(
+                                  'Weekly Working Days Configuration',
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            ElevatedButton.icon(
+                              icon: _savingWeekly
+                                  ? const SizedBox(
+                                      width: 14,
+                                      height: 14,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        color: Colors.white,
+                                      ),
+                                    )
+                                  : const Icon(Icons.save, size: 18),
+                              label: const Text('Save Weekly Schedule'),
+                              onPressed:
+                                  _savingWeekly ? null : _saveWeeklySchedule,
+                            ),
+                          ],
+                        ),
                   const SizedBox(height: 8),
                   const Text(
                     'Toggle which days of the week are default school working days vs weekly holidays.',
@@ -5310,89 +5961,103 @@ class _SchoolDaysTabState extends State<_SchoolDaysTab> {
                       ),
                     )
                   else
-                    Wrap(
-                      spacing: 12,
-                      runSpacing: 12,
-                      children: List.generate(_weeklySchedules.length, (index) {
-                        final item = _weeklySchedules[index];
-                        final isSun = item.dayOfWeek == 0;
+                    LayoutBuilder(
+                      builder: (context, constraints) {
+                        final cardWidth = constraints.maxWidth < 500
+                            ? (constraints.maxWidth - 12) / 2
+                            : 170.0;
+                        return Wrap(
+                          spacing: 12,
+                          runSpacing: 12,
+                          children: List.generate(_weeklySchedules.length, (index) {
+                            final item = _weeklySchedules[index];
+                            final isSun = item.dayOfWeek == 0;
 
-                        return Container(
-                          width: 170,
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 10,
-                          ),
-                          decoration: BoxDecoration(
-                            color: item.isWorkingDay
-                                ? Colors.green.withValues(alpha: 0.05)
-                                : Colors.orange.withValues(alpha: 0.05),
-                            borderRadius: BorderRadius.circular(10),
-                            border: Border.all(
-                              color: item.isWorkingDay
-                                  ? Colors.green.withValues(alpha: 0.3)
-                                  : Colors.orange.withValues(alpha: 0.3),
-                              width: 1.5,
-                            ),
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                mainAxisAlignment:
-                                    MainAxisAlignment.spaceBetween,
+                            return Container(
+                              width: cardWidth,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 10,
+                              ),
+                              decoration: BoxDecoration(
+                                color: item.isWorkingDay
+                                    ? Colors.green.withValues(alpha: 0.05)
+                                    : Colors.orange.withValues(alpha: 0.05),
+                                borderRadius: BorderRadius.circular(10),
+                                border: Border.all(
+                                  color: item.isWorkingDay
+                                      ? Colors.green.withValues(alpha: 0.3)
+                                      : Colors.orange.withValues(alpha: 0.3),
+                                  width: 1.5,
+                                ),
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text(
-                                    item.dayName,
-                                    style: TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 14,
-                                      color: isSun ? Colors.deepOrange : null,
-                                    ),
+                                  Row(
+                                    mainAxisAlignment:
+                                        MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      Expanded(
+                                        child: Text(
+                                          item.dayName,
+                                          style: TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 13,
+                                            color: isSun ? Colors.deepOrange : null,
+                                          ),
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+                                      Transform.scale(
+                                        scale: 0.8,
+                                        child: Switch(
+                                          value: item.isWorkingDay,
+                                          activeThumbColor: Colors.green,
+                                          inactiveThumbColor: Colors.orange,
+                                          onChanged: (val) {
+                                            setState(() {
+                                              _weeklySchedules[index] = item
+                                                  .copyWith(
+                                                    isWorkingDay: val,
+                                                  );
+                                            });
+                                          },
+                                        ),
+                                      ),
+                                    ],
                                   ),
-                                  Switch(
-                                    value: item.isWorkingDay,
-                                    activeThumbColor: Colors.green,
-                                    inactiveThumbColor: Colors.orange,
-                                    onChanged: (val) {
-                                      setState(() {
-                                        _weeklySchedules[index] = item.copyWith(
-                                          isWorkingDay: val,
-                                        );
-                                      });
-                                    },
+                                  const SizedBox(height: 4),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 8,
+                                      vertical: 2,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: item.isWorkingDay
+                                          ? Colors.green.shade100
+                                          : Colors.orange.shade100,
+                                      borderRadius: BorderRadius.circular(4),
+                                    ),
+                                    child: Text(
+                                      item.isWorkingDay
+                                          ? 'School Day'
+                                          : 'Holiday (Off)',
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w600,
+                                        color: item.isWorkingDay
+                                            ? Colors.green.shade900
+                                            : Colors.orange.shade900,
+                                      ),
+                                    ),
                                   ),
                                 ],
                               ),
-                              const SizedBox(height: 4),
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 8,
-                                  vertical: 2,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: item.isWorkingDay
-                                      ? Colors.green.shade100
-                                      : Colors.orange.shade100,
-                                  borderRadius: BorderRadius.circular(4),
-                                ),
-                                child: Text(
-                                  item.isWorkingDay
-                                      ? 'School Day'
-                                      : 'Holiday (Off)',
-                                  style: TextStyle(
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w600,
-                                    color: item.isWorkingDay
-                                        ? Colors.green.shade900
-                                        : Colors.orange.shade900,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
+                            );
+                          }),
                         );
-                      }),
+                      },
                     ),
                   const SizedBox(height: 12),
                   // Preset hint/scenario helper
@@ -5400,8 +6065,10 @@ class _SchoolDaysTabState extends State<_SchoolDaysTab> {
                     children: [
                       OutlinedButton.icon(
                         icon: const Icon(Icons.tune, size: 16),
-                        label: const Text(
-                          'Preset: Mon–Sat School Days, Sunday Holiday',
+                        label: Text(
+                          context.isMobile
+                              ? 'Preset: Mon–Sat'
+                              : 'Preset: Mon–Sat School Days, Sunday Holiday',
                         ),
                         onPressed: () {
                           setState(() {
@@ -5447,57 +6114,110 @@ class _SchoolDaysTabState extends State<_SchoolDaysTab> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Row(
-                        children: const [
-                          Icon(Icons.beach_access, color: Colors.orange),
-                          SizedBox(width: 8),
-                          Text(
-                            'Specific Date Holidays & Overrides',
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
+                  context.isMobile
+                      ? Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: const [
+                                Icon(Icons.beach_access, color: Colors.orange),
+                                SizedBox(width: 8),
+                                Text(
+                                  'Date Holidays & Overrides',
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ],
                             ),
-                          ),
-                        ],
-                      ),
-                      Wrap(
-                        spacing: 8,
-                        children: [
-                          OutlinedButton.icon(
-                            icon: const Icon(
-                              Icons.star,
-                              size: 16,
-                              color: Colors.orange,
+                            const SizedBox(height: 8),
+                            Wrap(
+                              spacing: 8,
+                              runSpacing: 8,
+                              children: [
+                                OutlinedButton.icon(
+                                  icon: const Icon(
+                                    Icons.star,
+                                    size: 16,
+                                    color: Colors.orange,
+                                  ),
+                                  label: const Text('Diwali Example'),
+                                  onPressed: () {
+                                    final now = DateTime.now();
+                                    int daysUntilMon =
+                                        (DateTime.monday - now.weekday + 7) % 7;
+                                    if (daysUntilMon == 0) daysUntilMon = 7;
+                                    final nextMon = now.add(
+                                      Duration(days: daysUntilMon),
+                                    );
+                                    _showAddHolidayDialog(
+                                      initialDate: nextMon,
+                                      initialTitle:
+                                          'Diwali - Public Holiday in Maharashtra',
+                                    );
+                                  },
+                                ),
+                                ElevatedButton.icon(
+                                  icon: const Icon(Icons.add, size: 18),
+                                  label: const Text('Declare Holiday'),
+                                  onPressed: () => _showAddHolidayDialog(),
+                                ),
+                              ],
                             ),
-                            label: const Text('Add Diwali Holiday Example'),
-                            onPressed: () {
-                              // Find upcoming Monday or today
-                              final now = DateTime.now();
-                              int daysUntilMon =
-                                  (DateTime.monday - now.weekday + 7) % 7;
-                              if (daysUntilMon == 0) daysUntilMon = 7;
-                              final nextMon = now.add(
-                                Duration(days: daysUntilMon),
-                              );
-                              _showAddHolidayDialog(
-                                initialDate: nextMon,
-                                initialTitle:
-                                    'Diwali - Public Holiday in Maharashtra',
-                              );
-                            },
-                          ),
-                          ElevatedButton.icon(
-                            icon: const Icon(Icons.add, size: 18),
-                            label: const Text('Declare Holiday'),
-                            onPressed: () => _showAddHolidayDialog(),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
+                          ],
+                        )
+                      : Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Row(
+                              children: const [
+                                Icon(Icons.beach_access, color: Colors.orange),
+                                SizedBox(width: 8),
+                                Text(
+                                  'Specific Date Holidays & Overrides',
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            Wrap(
+                              spacing: 8,
+                              children: [
+                                OutlinedButton.icon(
+                                  icon: const Icon(
+                                    Icons.star,
+                                    size: 16,
+                                    color: Colors.orange,
+                                  ),
+                                  label: const Text('Add Diwali Holiday Example'),
+                                  onPressed: () {
+                                    // Find upcoming Monday or today
+                                    final now = DateTime.now();
+                                    int daysUntilMon =
+                                        (DateTime.monday - now.weekday + 7) % 7;
+                                    if (daysUntilMon == 0) daysUntilMon = 7;
+                                    final nextMon = now.add(
+                                      Duration(days: daysUntilMon),
+                                    );
+                                    _showAddHolidayDialog(
+                                      initialDate: nextMon,
+                                      initialTitle:
+                                          'Diwali - Public Holiday in Maharashtra',
+                                    );
+                                  },
+                                ),
+                                ElevatedButton.icon(
+                                  icon: const Icon(Icons.add, size: 18),
+                                  label: const Text('Declare Holiday'),
+                                  onPressed: () => _showAddHolidayDialog(),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
                   const SizedBox(height: 8),
                   const Text(
                     'Declare public holidays, regional holidays, or custom school closed days for specific calendar dates.',
