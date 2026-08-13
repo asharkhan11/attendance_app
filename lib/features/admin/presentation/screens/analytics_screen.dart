@@ -558,17 +558,19 @@ class _AnalyticsScreenState extends State<AnalyticsScreen>
       physics: const NeverScrollableScrollPhysics(),
       crossAxisSpacing: 12,
       mainAxisSpacing: 12,
-      childAspectRatio: 1.6,
+      childAspectRatio: 1.2,
       children: cards,
     );
   }
 
   Widget _kpiCard(String title, String value, IconData icon, Color color) {
     return Card(
+      margin: EdgeInsets.zero,
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -578,21 +580,22 @@ class _AnalyticsScreenState extends State<AnalyticsScreen>
                     title,
                     style: TextStyle(
                       color: Colors.grey.shade600,
-                      fontSize: 12,
+                      fontSize: 11,
                       fontWeight: FontWeight.w600,
                     ),
                     maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
-                Icon(icon, color: color, size: 20),
+                Icon(icon, color: color, size: 16),
               ],
             ),
-            const SizedBox(height: 10),
+            const SizedBox(height: 6),
             Text(
               value,
               style: TextStyle(
                 color: color,
-                fontSize: 24,
+                fontSize: 22,
                 fontWeight: FontWeight.bold,
               ),
             ),
