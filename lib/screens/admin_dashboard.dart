@@ -11,7 +11,6 @@ import '../widgets/profile_modal.dart';
 import '../design_system/app_breakpoints.dart';
 import '../design_system/app_spacing.dart';
 import '../features/admin/presentation/widgets/admin_navigation.dart';
-import '../features/admin/presentation/widgets/analytics_filter_sheet.dart';
 import '../features/admin/presentation/screens/admin_overview_screen.dart';
 import '../features/admin/presentation/screens/analytics_screen.dart';
 
@@ -344,532 +343,6 @@ class _AdminDashboardState extends State<AdminDashboard> {
           ProfileModal.show(context, onProfileUpdated: _loadSharedData),
       onLogoutTap: () =>
           Provider.of<AuthProvider>(context, listen: false).logout(),
-    );
-  }
-}
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// TAB 1: Analytics
-// ═══════════════════════════════════════════════════════════════════════════════
-
-class _AnalyticsTab extends StatefulWidget {
-  final ApiService api;
-  final List<SchoolClass> classes;
-  final AcademicYear? selectedYear;
-  final void Function(String, {bool error}) snack;
-  const _AnalyticsTab({
-    required this.api,
-    required this.classes,
-    required this.selectedYear,
-    required this.snack,
-  });
-
-  @override
-  State<_AnalyticsTab> createState() => _AnalyticsTabState();
-}
-
-class _AnalyticsTabState extends State<_AnalyticsTab>
-    with AutomaticKeepAliveClientMixin {
-  @override
-  bool get wantKeepAlive => true;
-
-  SchoolClass? _selectedClass; // null = All Classes (School-Wide)
-  String _datePreset = 'month'; // 'week', 'month', '90days', 'all'
-  double _threshold = 75;
-  bool _loading = false;
-
-  Map<String, dynamic>? _overviewData;
-  List<dynamic> _trendData = [];
-  List<dynamic> _defaultersData = [];
-  DateTimeRange? _customDateRange;
-
-  @override
-  void initState() {
-    super.initState();
-    _loadAllAnalytics();
-  }
-
-  @override
-  void didUpdateWidget(covariant _AnalyticsTab oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.selectedYear?.id != widget.selectedYear?.id) {
-      _loadAllAnalytics();
-    }
-  }
-
-  (String, String) _getDateRange() {
-    final now = DateTime.now();
-    DateTime toDt = now;
-
-    if (widget.selectedYear != null) {
-      final eDate = widget.selectedYear!.endDate.split('T')[0];
-      final parsedEnd = DateTime.tryParse(eDate);
-      if (parsedEnd != null && parsedEnd.isBefore(now)) {
-        toDt = parsedEnd;
-      }
-    }
-
-    DateTime fromDt;
-    switch (_datePreset) {
-      case 'week':
-        fromDt = toDt.subtract(const Duration(days: 7));
-        break;
-      case '90days':
-        fromDt = toDt.subtract(const Duration(days: 90));
-        break;
-      case 'all':
-        if (widget.selectedYear != null) {
-          final sDate = widget.selectedYear!.startDate.split('T')[0];
-          fromDt = DateTime.tryParse(sDate) ?? DateTime(2025, 1, 1);
-        } else {
-          fromDt = DateTime(2025, 1, 1);
-        }
-        break;
-      case 'custom':
-        if (_customDateRange != null) {
-          fromDt = _customDateRange!.start;
-          toDt = _customDateRange!.end;
-        } else {
-          fromDt = toDt.subtract(const Duration(days: 30));
-        }
-        break;
-      case 'month':
-      default:
-        fromDt = DateTime(toDt.year, toDt.month, 1);
-        break;
-    }
-    final from =
-        "${fromDt.year}-${fromDt.month.toString().padLeft(2, '0')}-${fromDt.day.toString().padLeft(2, '0')}";
-    final to =
-        "${toDt.year}-${toDt.month.toString().padLeft(2, '0')}-${toDt.day.toString().padLeft(2, '0')}";
-    return (from, to);
-  }
-
-  Future<void> _loadAllAnalytics() async {
-    setState(() => _loading = true);
-    try {
-      final (from, to) = _getDateRange();
-      final ayId = widget.selectedYear?.id;
-
-      final ovRes = await widget.api.getSchoolOverview(
-        academicYearId: ayId,
-        classId: _selectedClass?.id,
-        from: from,
-        to: to,
-        threshold: _threshold,
-      );
-      if (ovRes is Map && ovRes['data'] != null) {
-        _overviewData = Map<String, dynamic>.from(ovRes['data'] as Map);
-      } else if (ovRes is Map) {
-        _overviewData = Map<String, dynamic>.from(ovRes);
-      }
-
-      if (_selectedClass != null) {
-        try {
-          final clsSum = await widget.api.getClassSummary(
-            _selectedClass!.id,
-            from: from,
-            to: to,
-          );
-          final summaryMap = (clsSum is Map && clsSum['data'] != null)
-              ? clsSum['data'] as Map<String, dynamic>
-              : (clsSum is Map ? clsSum as Map<String, dynamic> : null);
-          if (summaryMap != null) {
-            _overviewData = {
-              ...?_overviewData,
-              'overall_attendance_pct':
-                  summaryMap['attendance_percentage'] ??
-                  summaryMap['overall_attendance_pct'] ??
-                  _overviewData?['overall_attendance_pct'],
-              'total_students':
-                  summaryMap['total_students'] ??
-                  _overviewData?['total_students'],
-              'total_sessions':
-                  summaryMap['total_sessions'] ??
-                  _overviewData?['total_sessions'],
-              'total_defaulters':
-                  summaryMap['defaulters_count'] ??
-                  summaryMap['total_defaulters'] ??
-                  _overviewData?['total_defaulters'],
-            };
-          }
-        } catch (_) {}
-      }
-
-      final defRes = await widget.api.getSchoolDefaulters(
-        classId: _selectedClass?.id,
-        from: from,
-        to: to,
-        threshold: _threshold,
-      );
-      if (defRes is Map && defRes['data'] is List) {
-        _defaultersData = defRes['data'] as List;
-      } else if (defRes is List) {
-        _defaultersData = defRes;
-      } else {
-        _defaultersData = [];
-      }
-
-      final trRes = _selectedClass == null
-          ? await widget.api.getSchoolTrend(
-              from: from,
-              to: to,
-              granularity: 'week',
-            )
-          : await widget.api.getClassTrend(
-              _selectedClass!.id,
-              from: from,
-              to: to,
-              granularity: 'week',
-            );
-
-      if (trRes is Map &&
-          trRes['data'] is Map &&
-          trRes['data']['trend'] is List) {
-        _trendData = trRes['data']['trend'] as List;
-      } else if (trRes is Map && trRes['trend'] is List) {
-        _trendData = trRes['trend'] as List;
-      } else if (trRes is Map && trRes['data'] is List) {
-        _trendData = trRes['data'] as List;
-      } else if (trRes is List) {
-        _trendData = trRes;
-      } else {
-        _trendData = [];
-      }
-    } catch (e) {
-      widget.snack('Error loading analytics: $e');
-    } finally {
-      if (mounted) setState(() => _loading = false);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    super.build(context);
-    if (widget.selectedYear == null) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              Icons.analytics_outlined,
-              size: 64,
-              color: Colors.orange.shade400,
-            ),
-            const SizedBox(height: 16),
-            Text(
-              'No Academic Session Selected',
-              style: Theme.of(
-                context,
-              ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 8),
-            const Text(
-              'Please select an Academic Session to view analytics.',
-              style: TextStyle(color: Colors.grey),
-            ),
-          ],
-        ),
-      );
-    }
-
-    num? findNum(List<String> keys) {
-      for (final k in keys) {
-        final val = _overviewData?[k];
-        if (val is num) return val;
-      }
-      return null;
-    }
-
-    double overallPct =
-        (findNum([
-                  'overall_attendance_pct',
-                  'attendance_percentage',
-                  'overall_attendance_percentage',
-                  'attendance_rate',
-                  'average_attendance',
-                ]) ??
-                0.0)
-            .toDouble();
-    int totalStudents =
-        (findNum([
-                  'total_students',
-                  'enrolled_students',
-                  'student_count',
-                  'students_count',
-                ]) ??
-                0)
-            .toInt();
-    int totalSessions =
-        (findNum([
-                  'total_sessions',
-                  'sessions_conducted',
-                  'session_count',
-                  'sessions_count',
-                ]) ??
-                0)
-            .toInt();
-    int totalDefaulters =
-        (findNum(['total_defaulters', 'defaulters_count', 'defaulter_count']) ??
-                0)
-            .toInt();
-    final rawComparisons = (_overviewData?['class_comparisons'] as List?) ?? [];
-
-    final classComparisons = _selectedClass == null
-        ? rawComparisons
-        : rawComparisons.where((c) {
-            final cId = c['class_id']?.toString();
-            final cName = c['class_name']?.toString() ?? '';
-            return (cId != null && cId == _selectedClass!.id) ||
-                cName.contains(_selectedClass!.displayName);
-          }).toList();
-
-    final barComparisons = classComparisons.isNotEmpty
-        ? classComparisons
-        : (_selectedClass != null
-              ? [
-                  {
-                    'class_name': _selectedClass!.displayName,
-                    'attendance_percentage': overallPct,
-                  },
-                ]
-              : []);
-
-    if (rawComparisons.isNotEmpty && _selectedClass == null) {
-      if (overallPct == 0.0) {
-        final pcts = rawComparisons
-            .map((c) => (c['attendance_percentage'] as num?)?.toDouble() ?? 0.0)
-            .where((p) => p > 0)
-            .toList();
-        if (pcts.isNotEmpty) {
-          overallPct = pcts.reduce((a, b) => a + b) / pcts.length;
-        }
-      }
-      if (totalStudents == 0) {
-        totalStudents = rawComparisons.fold<int>(
-          0,
-          (sum, c) => sum + ((c['total_students'] as num?)?.toInt() ?? 0),
-        );
-      }
-    }
-
-    if (totalDefaulters == 0 && _defaultersData.isNotEmpty) {
-      totalDefaulters = _defaultersData.length;
-    }
-
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Header Controls
-          Card(
-            margin: EdgeInsets.zero,
-            child: Padding(
-              padding: const EdgeInsets.all(14),
-              child: Wrap(
-                spacing: 12,
-                runSpacing: 12,
-                crossAxisAlignment: WrapCrossAlignment.center,
-                children: [
-                  if (context.isMobile)
-                    OutlinedButton.icon(
-                      icon: const Icon(Icons.filter_list),
-                      label: const Text('Analytics Filters'),
-                      onPressed: () => AnalyticsFilterSheet.show(
-                        context,
-                        classes: widget.classes,
-                        selectedClass: _selectedClass,
-                        threshold: _threshold,
-                        onClassChanged: (c) {
-                          setState(() => _selectedClass = c);
-                          _loadAllAnalytics();
-                        },
-                        onThresholdChanged: (t) {
-                          setState(() => _threshold = t);
-                          _loadAllAnalytics();
-                        },
-                      ),
-                    )
-                  else ...[
-                    SizedBox(
-                      width: 220,
-                      child: SearchableDropdown<SchoolClass?>(
-                        value: _selectedClass,
-                        labelText: 'Class Scope',
-                        isDense: true,
-                        items: [null, ...widget.classes],
-                        itemAsString: (c) => c == null
-                            ? '🏫 All Classes (School-Wide)'
-                            : c.displayName,
-                        onChanged: (v) {
-                          setState(() => _selectedClass = v);
-                          _loadAllAnalytics();
-                        },
-                      ),
-                    ),
-                  ],
-
-                  DropdownButton<String>(
-                    value: _datePreset,
-                    isDense: true,
-                    underline: const SizedBox(),
-                    items: [
-                      const DropdownMenuItem(
-                        value: 'week',
-                        child: Text('Last 7 Days'),
-                      ),
-                      const DropdownMenuItem(
-                        value: 'month',
-                        child: Text('This Month'),
-                      ),
-                      const DropdownMenuItem(
-                        value: '90days',
-                        child: Text('Last 90 Days'),
-                      ),
-                      const DropdownMenuItem(
-                        value: 'all',
-                        child: Text('All Time'),
-                      ),
-                      DropdownMenuItem(
-                        value: 'custom',
-                        child: Text(
-                          _customDateRange != null
-                              ? '📅 ${_customDateRange!.start.month}/${_customDateRange!.start.day} - ${_customDateRange!.end.month}/${_customDateRange!.end.day}'
-                              : '📅 Custom Range...',
-                        ),
-                      ),
-                    ],
-                    onChanged: (v) async {
-                      if (v != null) {
-                        if (v == 'custom') {
-                          final now = DateTime.now();
-                          final picked = await showDateRangePicker(
-                            context: context,
-                            initialEntryMode: DatePickerEntryMode.inputOnly,
-                            initialDateRange:
-                                _customDateRange ??
-                                DateTimeRange(
-                                  start: now.subtract(const Duration(days: 30)),
-                                  end: now,
-                                ),
-                            firstDate: DateTime(2020),
-                            lastDate: DateTime(2035),
-                            builder: (context, child) {
-                              return Theme(
-                                data: Theme.of(context).copyWith(
-                                  colorScheme: ColorScheme.light(
-                                    primary: Theme.of(context).primaryColor,
-                                  ),
-                                ),
-                                child: child!,
-                              );
-                            },
-                          );
-                          if (picked != null) {
-                            setState(() {
-                              _customDateRange = picked;
-                              _datePreset = 'custom';
-                            });
-                            _loadAllAnalytics();
-                          }
-                        } else {
-                          setState(() => _datePreset = v);
-                          _loadAllAnalytics();
-                        }
-                      }
-                    },
-                  ),
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Text(
-                        'Defaulter Cutoff:',
-                        style: TextStyle(fontSize: 13),
-                      ),
-                      const SizedBox(width: 6),
-                      SizedBox(
-                        width: 70,
-                        child: TextFormField(
-                          initialValue: _threshold.toStringAsFixed(0),
-                          decoration: const InputDecoration(
-                            suffixText: '%',
-                            border: OutlineInputBorder(),
-                            isDense: true,
-                            contentPadding: EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 6,
-                            ),
-                          ),
-                          keyboardType: TextInputType.number,
-                          onChanged: (v) {
-                            _threshold = double.tryParse(v) ?? 75;
-                          },
-                          onFieldSubmitted: (v) {
-                            _threshold = double.tryParse(v) ?? 75;
-                            _loadAllAnalytics();
-                          },
-                        ),
-                      ),
-                    ],
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.refresh),
-                    tooltip: 'Refresh Data',
-                    onPressed: _loadAllAnalytics,
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _kpiCard(
-    String title,
-    String value,
-    IconData icon,
-    Color color,
-    bool isWide,
-  ) {
-    return SizedBox(
-      width: isWide ? 220 : 160,
-      child: Card(
-        elevation: 2,
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    title,
-                    style: TextStyle(
-                      color: Colors.grey.shade700,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  Icon(icon, color: color, size: 20),
-                ],
-              ),
-              const SizedBox(height: 8),
-              Text(
-                value,
-                style: TextStyle(
-                  color: color,
-                  fontSize: 22,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
     );
   }
 }
@@ -2273,13 +1746,18 @@ class _StudentsTabState extends State<_StudentsTab> {
 
                         final nav = Navigator.of(dialogCtx);
                         try {
+                          final dobVal = dobCtrl.text.trim();
                           await widget.api.createStudent({
                             'class_id': cls!.id,
                             'admission_number': admCtrl.text.trim(),
                             'roll_number': roll,
                             'full_name': name,
                             'gender': gender,
-                            'dob': dobCtrl.text.trim(),
+                            'dob': dobVal.isEmpty
+                                ? null
+                                : (dobVal.contains('T')
+                                    ? dobVal.split('T')[0]
+                                    : dobVal),
                             'guardian_name': guardianCtrl.text.trim(),
                             'guardian_phone': guardianPhoneCtrl.text.trim(),
                           });
@@ -2326,7 +1804,10 @@ class _StudentsTabState extends State<_StudentsTab> {
     final admCtrl = TextEditingController(text: s.admissionNumber);
     final rollCtrl = TextEditingController(text: s.rollNumber);
     final nameCtrl = TextEditingController(text: s.fullName);
-    final dobCtrl = TextEditingController(text: s.dob ?? '');
+    final initialDob = s.dob != null && s.dob!.isNotEmpty
+        ? (s.dob!.contains('T') ? s.dob!.split('T')[0] : s.dob!)
+        : '';
+    final dobCtrl = TextEditingController(text: initialDob);
     final guardianCtrl = TextEditingController(text: s.guardianName ?? '');
     final guardianPhoneCtrl = TextEditingController(
       text: s.guardianPhone ?? '',
@@ -2517,13 +1998,18 @@ class _StudentsTabState extends State<_StudentsTab> {
 
                       final nav = Navigator.of(dialogCtx);
                       try {
+                        final dobVal = dobCtrl.text.trim();
                         await widget.api.updateStudent(s.id, {
                           'class_id': cls!.id,
                           'admission_number': adm,
                           'roll_number': roll,
                           'full_name': name,
                           'gender': gender,
-                          'dob': dobCtrl.text.trim(),
+                          'dob': dobVal.isEmpty
+                              ? null
+                              : (dobVal.contains('T')
+                                  ? dobVal.split('T')[0]
+                                  : dobVal),
                           'guardian_name': guardianCtrl.text.trim(),
                           'guardian_phone': guardianPhoneCtrl.text.trim(),
                         });
@@ -3029,8 +2515,8 @@ class _ReportsTabState extends State<_ReportsTab> {
   String _reportType =
       'matrix'; // 'matrix', 'class_summary', 'defaulters', 'audit_log'
   SchoolClass? _selectedClass;
-  int _selectedYear = 2026;
-  int _selectedMonth = 6; // June 2026 seed default
+  late int _selectedYear;
+  late int _selectedMonth;
   double _threshold = 75;
 
   bool _loading = false;
@@ -3039,11 +2525,75 @@ class _ReportsTabState extends State<_ReportsTab> {
 
   final _sessionIdCtrl = TextEditingController();
 
+  DateTime? _parseDate(String? d) {
+    if (d == null || d.isEmpty) return null;
+    return DateTime.tryParse(d);
+  }
+
+  List<int> get _availableYears {
+    final nowYear = DateTime.now().year;
+    final set = <int>{
+      nowYear - 2,
+      nowYear - 1,
+      nowYear,
+      nowYear + 1,
+      nowYear + 2,
+      _selectedYear,
+    };
+    final sDate = _parseDate(widget.selectedYear?.startDate);
+    final eDate = _parseDate(widget.selectedYear?.endDate);
+    if (sDate != null) set.add(sDate.year);
+    if (eDate != null) set.add(eDate.year);
+    final list = set.toList()..sort();
+    return list;
+  }
+
+  String get _defaultFromDate {
+    final s = widget.selectedYear?.startDate;
+    if (s != null && s.isNotEmpty) return s;
+    return "$_selectedYear-01-01";
+  }
+
+  String get _defaultToDate {
+    final e = widget.selectedYear?.endDate;
+    if (e != null && e.isNotEmpty) return e;
+    return "$_selectedYear-12-31";
+  }
+
+  void _syncYearMonth() {
+    final now = DateTime.now();
+    final sDate = _parseDate(widget.selectedYear?.startDate);
+    final eDate = _parseDate(widget.selectedYear?.endDate);
+    if (sDate != null && eDate != null) {
+      if (now.year >= sDate.year && now.year <= eDate.year) {
+        _selectedYear = now.year;
+        _selectedMonth = now.month;
+      } else {
+        _selectedYear = sDate.year;
+        _selectedMonth = sDate.month;
+      }
+    } else {
+      _selectedYear = now.year;
+      _selectedMonth = now.month;
+    }
+  }
+
   @override
   void initState() {
     super.initState();
+    _syncYearMonth();
+
     if (widget.classes.isNotEmpty) {
       _selectedClass = widget.classes.first;
+      _loadPreview();
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant _ReportsTab oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.selectedYear?.id != widget.selectedYear?.id) {
+      _syncYearMonth();
       _loadPreview();
     }
   }
@@ -3063,22 +2613,22 @@ class _ReportsTabState extends State<_ReportsTab> {
         if (_selectedClass == null) return;
         final res = await widget.api.getClassSummary(
           _selectedClass!.id,
-          from: '2026-06-01',
-          to: '2026-07-25',
+          from: _defaultFromDate,
+          to: _defaultToDate,
         );
         _previewData = res is Map ? res['data'] ?? res : res;
       } else if (_reportType == 'defaulters') {
         final res = await widget.api.getSchoolDefaulters(
           classId: _selectedClass?.id,
-          from: '2026-06-01',
-          to: '2026-07-25',
+          from: _defaultFromDate,
+          to: _defaultToDate,
           threshold: _threshold,
         );
         _previewData = res is Map ? res['data'] ?? res : res;
       } else if (_reportType == 'audit_log') {
         final res = await widget.api.getAuditLogs(
-          from: '2026-06-01',
-          to: '2026-07-25',
+          from: _defaultFromDate,
+          to: _defaultToDate,
         );
         _previewData = res is Map ? res['data'] ?? res : res;
       }
@@ -3106,14 +2656,14 @@ class _ReportsTabState extends State<_ReportsTab> {
       } else if (_reportType == 'defaulters') {
         file = await widget.api.exportDefaultersReport(
           classId: _selectedClass?.id,
-          from: '2026-06-01',
-          to: '2026-07-25',
+          from: _defaultFromDate,
+          to: _defaultToDate,
           threshold: _threshold,
         );
       } else if (_reportType == 'audit_log') {
         file = await widget.api.exportAuditLogs(
-          from: '2026-06-01',
-          to: '2026-07-25',
+          from: _defaultFromDate,
+          to: _defaultToDate,
         );
       } else {
         if (_selectedClass == null) {
@@ -3291,7 +2841,9 @@ class _ReportsTabState extends State<_ReportsTab> {
                             children: [
                               Expanded(
                                 child: DropdownButtonFormField<int>(
+                                  key: ValueKey('matrix_month_mob_$_selectedMonth'),
                                   initialValue: _selectedMonth,
+                                  isExpanded: true,
                                   decoration: const InputDecoration(
                                     labelText: 'Month',
                                     border: OutlineInputBorder(),
@@ -3315,26 +2867,20 @@ class _ReportsTabState extends State<_ReportsTab> {
                               const SizedBox(width: 8),
                               Expanded(
                                 child: DropdownButtonFormField<int>(
+                                  key: ValueKey('matrix_year_mob_$_selectedYear'),
                                   initialValue: _selectedYear,
+                                  isExpanded: true,
                                   decoration: const InputDecoration(
                                     labelText: 'Year',
                                     border: OutlineInputBorder(),
                                     isDense: true,
                                   ),
-                                  items: const [
-                                    DropdownMenuItem(
-                                      value: 2025,
-                                      child: Text('2025'),
+                                  items: _availableYears.map(
+                                    (y) => DropdownMenuItem(
+                                      value: y,
+                                      child: Text('$y'),
                                     ),
-                                    DropdownMenuItem(
-                                      value: 2026,
-                                      child: Text('2026'),
-                                    ),
-                                    DropdownMenuItem(
-                                      value: 2027,
-                                      child: Text('2027'),
-                                    ),
-                                  ],
+                                  ).toList(),
                                   onChanged: (v) {
                                     if (v != null) {
                                       setState(() => _selectedYear = v);
@@ -3347,9 +2893,11 @@ class _ReportsTabState extends State<_ReportsTab> {
                           )
                         else ...[
                           SizedBox(
-                            width: 90,
+                            width: 95,
                             child: DropdownButtonFormField<int>(
+                              key: ValueKey('matrix_month_desk_$_selectedMonth'),
                               initialValue: _selectedMonth,
+                              isExpanded: true,
                               decoration: const InputDecoration(
                                 labelText: 'Month',
                                 border: OutlineInputBorder(),
@@ -3371,28 +2919,22 @@ class _ReportsTabState extends State<_ReportsTab> {
                             ),
                           ),
                           SizedBox(
-                            width: 100,
+                            width: 115,
                             child: DropdownButtonFormField<int>(
+                              key: ValueKey('matrix_year_desk_$_selectedYear'),
                               initialValue: _selectedYear,
+                              isExpanded: true,
                               decoration: const InputDecoration(
                                 labelText: 'Year',
                                 border: OutlineInputBorder(),
                                 isDense: true,
                               ),
-                              items: const [
-                                DropdownMenuItem(
-                                  value: 2025,
-                                  child: Text('2025'),
+                              items: _availableYears.map(
+                                (y) => DropdownMenuItem(
+                                  value: y,
+                                  child: Text('$y'),
                                 ),
-                                DropdownMenuItem(
-                                  value: 2026,
-                                  child: Text('2026'),
-                                ),
-                                DropdownMenuItem(
-                                  value: 2027,
-                                  child: Text('2027'),
-                                ),
-                              ],
+                              ).toList(),
                               onChanged: (v) {
                                 if (v != null) {
                                   setState(() => _selectedYear = v);
@@ -3826,9 +3368,11 @@ class _ReportsTabState extends State<_ReportsTab> {
                         ),
                       ),
                       ...List.generate(daysInMonth, (i) {
+                        final gridYear = data['year'] as int? ?? _selectedYear;
+                        final gridMonth = data['month'] as int? ?? _selectedMonth;
                         final dStr = fmtDate(
-                          _selectedYear,
-                          _selectedMonth,
+                          gridYear,
+                          gridMonth,
                           i + 1,
                         );
                         final code = daily[dStr] ?? '-';
@@ -4277,9 +3821,8 @@ class _ReportsTabState extends State<_ReportsTab> {
     return "$y-${m.toString().padLeft(2, '0')}-${d.toString().padLeft(2, '0')}";
   }
 }
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// TAB 0: Academic Sessions Management — List, Create, Set Active, Archive, Promote, Copy Teachers
+         // ═══════════════════════════════════════════════════════════════════════════════
+// TAB 0: Academic Sessions Management — Active Session, Permanent Archival, Isolated Copy & Progression
 // ═══════════════════════════════════════════════════════════════════════════════
 
 class _AcademicSessionsTab extends StatefulWidget {
@@ -4306,15 +3849,11 @@ class _AcademicSessionsTab extends StatefulWidget {
 }
 
 class _AcademicSessionsTabState extends State<_AcademicSessionsTab> {
-  // Copy Classes state
-  AcademicYear? _copyClassSourceYear;
-  AcademicYear? _copyClassTargetYear;
-  bool _copyingClasses = false;
+  // Navigation within Sessions: 0 = Active Session, 1 = Archived Sessions
+  int _sessionSubTab = 0;
 
-  // Copy Teachers state
-  AcademicYear? _copyTeacherSourceYear;
-  AcademicYear? _copyTeacherTargetYear;
-  bool _copyingTeachers = false;
+  // Copy operations state
+  bool _isCopying = false;
 
   // Move Students (Same Session) state
   SchoolClass? _moveSourceClass;
@@ -4324,35 +3863,55 @@ class _AcademicSessionsTabState extends State<_AcademicSessionsTab> {
   bool _loadingMoveStudents = false;
   bool _moving = false;
 
-  // Promote Students (Cross Session) state
-  AcademicYear? _promoteSourceYear;
-  AcademicYear? _promoteTargetYear;
-  List<SchoolClass> _promoteSourceClasses = [];
-  List<SchoolClass> _promoteTargetClasses = [];
-  SchoolClass? _promoteSourceClass;
-  SchoolClass? _promoteTargetClass;
-  List<Student> _promoteSourceStudents = [];
-  Set<String> _selectedPromoteStudentIds = {};
-  bool _loadingPromoteStudents = false;
-  bool _promoting = false;
+  // Move All Higher progression state
+  bool _movingAllHigher = false;
 
-  int _studentOperationMode =
-      0; // 0: Move (Same Session), 1: Promote (Cross Session)
+  AcademicYear? get _activeYear {
+    final matches = widget.years.where((y) => y.isCurrent && !y.isArchived);
+    return matches.isNotEmpty ? matches.first : null;
+  }
+
+  List<AcademicYear> get _archivedYears {
+    return widget.years.where((y) => y.isArchived).toList();
+  }
 
   void _showCreateYearDialog() {
     final nameCtrl = TextEditingController();
     final startCtrl = TextEditingController(text: '2026-06-01');
     final endCtrl = TextEditingController(text: '2027-03-31');
-    bool isCurrent = false;
 
     showDialog(
       context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (dialogCtx, setD) => AlertDialog(
-          title: const Text('Create New Academic Session'),
-          content: Column(
+      builder: (ctx) => AlertDialog(
+        title: const Text('Create New Academic Session'),
+        content: SingleChildScrollView(
+          child: Column(
             mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              if (_activeYear != null) ...[
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: Colors.amber.shade50,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.amber.shade400),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.info_outline, color: Colors.amber.shade900, size: 20),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Creating this session will automatically archive "${_activeYear!.name}" (making it read-only) and activate this new session.',
+                          style: TextStyle(fontSize: 12, color: Colors.amber.shade900),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 14),
+              ],
               TextField(
                 controller: nameCtrl,
                 decoration: const InputDecoration(
@@ -4376,106 +3935,231 @@ class _AcademicSessionsTabState extends State<_AcademicSessionsTab> {
                   border: OutlineInputBorder(),
                 ),
               ),
-              const SizedBox(height: 8),
-              CheckboxListTile(
-                title: const Text('Set as Active Current Session'),
-                value: isCurrent,
-                onChanged: (v) => setD(() => isCurrent = v ?? false),
-                controlAffinity: ListTileControlAffinity.leading,
-                contentPadding: EdgeInsets.zero,
-              ),
             ],
           ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(dialogCtx),
-              child: const Text('CANCEL'),
-            ),
-            ElevatedButton(
-              onPressed: () async {
-                final name = nameCtrl.text.trim();
-                if (name.isEmpty) return;
-                final nav = Navigator.of(dialogCtx);
-                try {
-                  await widget.api.createAcademicYear({
-                    'name': name,
-                    'start_date': startCtrl.text.trim(),
-                    'end_date': endCtrl.text.trim(),
-                    'is_current': isCurrent,
-                  });
-                  nav.pop();
-                  widget.snack(
-                    'Academic session created successfully',
-                    error: false,
-                  );
-                  widget.onRefresh();
-                } catch (e) {
-                  widget.snack('Failed to create session: $e');
-                }
-              },
-              child: const Text('CREATE'),
-            ),
-          ],
         ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('CANCEL'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              final name = nameCtrl.text.trim();
+              if (name.isEmpty) {
+                widget.snack('Please enter a session name');
+                return;
+              }
+              final nav = Navigator.of(ctx);
+              try {
+                await widget.api.createAcademicYear({
+                  'name': name,
+                  'start_date': startCtrl.text.trim(),
+                  'end_date': endCtrl.text.trim(),
+                  'is_current': true,
+                });
+                nav.pop();
+                widget.snack(
+                  'Academic session "$name" created and set as active',
+                  error: false,
+                );
+                widget.onRefresh();
+              } catch (e) {
+                widget.snack('Failed to create session: $e');
+              }
+            },
+            child: const Text('CREATE & ACTIVATE'),
+          ),
+        ],
       ),
     );
   }
 
-  Future<void> _executeCopyClasses() async {
-    if (_copyClassSourceYear == null || _copyClassTargetYear == null) {
-      widget.snack('Please select both source and target sessions');
-      return;
-    }
-    if (_copyClassSourceYear!.id == _copyClassTargetYear!.id) {
-      widget.snack('Source and target sessions must be different');
-      return;
-    }
+  void _showEditYearDialog(AcademicYear year) {
+    final nameCtrl = TextEditingController(text: year.name);
+    final startCtrl = TextEditingController(text: year.startDate.split('T')[0]);
+    final endCtrl = TextEditingController(text: year.endDate.split('T')[0]);
 
-    setState(() => _copyingClasses = true);
-    try {
-      final res = await widget.api.copyClasses({
-        'source_academic_year_id': _copyClassSourceYear!.id,
-        'target_academic_year_id': _copyClassTargetYear!.id,
-      });
-      final count = res is Map ? res['copied'] : 0;
-      widget.snack(
-        'Successfully copied $count class structures to ${_copyClassTargetYear!.name}',
-        error: false,
-      );
-      widget.onRefresh();
-    } catch (e) {
-      widget.snack('Failed to copy classes: $e');
-    } finally {
-      if (mounted) setState(() => _copyingClasses = false);
-    }
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('Edit Academic Session: ${year.name}'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              TextField(
+                controller: nameCtrl,
+                decoration: const InputDecoration(
+                  labelText: 'Session Name (e.g. 2027-2028)',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: startCtrl,
+                decoration: const InputDecoration(
+                  labelText: 'Start Date (YYYY-MM-DD)',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: endCtrl,
+                decoration: const InputDecoration(
+                  labelText: 'End Date (YYYY-MM-DD)',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('CANCEL'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              final name = nameCtrl.text.trim();
+              if (name.isEmpty) {
+                widget.snack('Please enter a session name');
+                return;
+              }
+              final nav = Navigator.of(ctx);
+              try {
+                await widget.api.updateAcademicYear(year.id, {
+                  'name': name,
+                  'start_date': startCtrl.text.trim(),
+                  'end_date': endCtrl.text.trim(),
+                });
+                nav.pop();
+                widget.snack(
+                  'Academic session updated to "$name"',
+                  error: false,
+                );
+                widget.onRefresh();
+              } catch (e) {
+                widget.snack('Failed to update session: $e');
+              }
+            },
+            child: const Text('SAVE'),
+          ),
+        ],
+      ),
+    );
   }
 
-  Future<void> _executeTeacherRollover() async {
-    if (_copyTeacherSourceYear == null || _copyTeacherTargetYear == null) {
-      widget.snack('Please select source and target academic sessions');
+  void _showArchiveConfirmationDialog(AcademicYear year) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Row(
+          children: [
+            Icon(Icons.warning_amber_rounded, color: Colors.orange.shade800, size: 28),
+            const SizedBox(width: 10),
+            const Text('Archive Academic Session?'),
+          ],
+        ),
+        content: Text(
+          'Archiving "${year.name}" will lock all attendance records, classes, and students into permanent READ-ONLY mode.\n\n'
+          '⚠️ This action is IRREVERSIBLE. Once archived, this session cannot be reactivated.',
+          style: const TextStyle(height: 1.4),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('CANCEL'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.orange.shade800,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () async {
+              final nav = Navigator.of(ctx);
+              try {
+                await widget.api.archiveAcademicYear(year.id);
+                nav.pop();
+                widget.snack(
+                  'Session "${year.name}" has been archived and locked',
+                  error: false,
+                );
+                widget.onRefresh();
+              } catch (e) {
+                widget.snack('Failed to archive session: $e');
+              }
+            },
+            child: const Text('CONFIRM ARCHIVE'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _executeCopy(String mode, AcademicYear sourceYear) async {
+    final active = _activeYear;
+    if (active == null) {
+      widget.snack('No active session found to copy data into. Please create an active session first.');
       return;
     }
-    if (_copyTeacherSourceYear!.id == _copyTeacherTargetYear!.id) {
+    if (sourceYear.id == active.id) {
       widget.snack('Source and target sessions must be different');
       return;
     }
 
-    setState(() => _copyingTeachers = true);
+    setState(() => _isCopying = true);
     try {
-      final res = await widget.api.copyTeachers({
-        'source_academic_year_id': _copyTeacherSourceYear!.id,
-        'target_academic_year_id': _copyTeacherTargetYear!.id,
-      });
-      final copied = res is Map ? res['copied'] : 0;
-      widget.snack(
-        'Teacher assignments copied to ${_copyTeacherTargetYear!.name} ($copied class assignments mapped)',
-        error: false,
-      );
+      if (mode == 'all') {
+        final res = await widget.api.copyAll({
+          'source_academic_year_id': sourceYear.id,
+          'target_academic_year_id': active.id,
+        });
+        final data = res is Map ? res['data'] ?? res : res;
+        final cls = data['classes_copied'] ?? 0;
+        final stu = data['students_copied'] ?? 0;
+        final tch = data['teachers_copied'] ?? 0;
+        widget.snack(
+          'Copied whole state from ${sourceYear.name} to ${active.name} ($cls classes, $tch teachers, $stu students)',
+          error: false,
+        );
+      } else if (mode == 'classes') {
+        final res = await widget.api.copyClasses({
+          'source_academic_year_id': sourceYear.id,
+          'target_academic_year_id': active.id,
+        });
+        final count = res is Map ? res['copied'] ?? 0 : 0;
+        widget.snack(
+          'Successfully copied $count classes to ${active.name}',
+          error: false,
+        );
+      } else if (mode == 'teachers') {
+        final res = await widget.api.copyTeachers({
+          'source_academic_year_id': sourceYear.id,
+          'target_academic_year_id': active.id,
+        });
+        final count = res is Map ? res['copied'] ?? 0 : 0;
+        widget.snack(
+          'Copied teacher assignments to ${active.name} ($count classes assigned)',
+          error: false,
+        );
+      } else if (mode == 'students') {
+        final res = await widget.api.copyStudents({
+          'source_academic_year_id': sourceYear.id,
+          'target_academic_year_id': active.id,
+        });
+        final count = res is Map ? res['copied'] ?? 0 : 0;
+        widget.snack(
+          'Copied $count student records to ${active.name}',
+          error: false,
+        );
+      }
       widget.onRefresh();
     } catch (e) {
-      widget.snack('Failed to copy teacher assignments: $e');
+      widget.snack('Copy failed: $e');
     } finally {
-      if (mounted) setState(() => _copyingTeachers = false);
+      if (mounted) setState(() => _isCopying = false);
     }
   }
 
@@ -4542,91 +4226,71 @@ class _AcademicSessionsTabState extends State<_AcademicSessionsTab> {
     }
   }
 
-  Future<void> _loadPromoteClasses(AcademicYear? year, bool isSource) async {
-    if (year == null) return;
-    try {
-      final cp = await widget.api.listClasses(
-        academicYearId: year.id,
-        pageSize: 100,
-      );
-      final clsList = cp.data.map((x) => SchoolClass.fromJson(x)).toList();
-      setState(() {
-        if (isSource) {
-          _promoteSourceClasses = clsList;
-          _promoteSourceClass = null;
-          _promoteSourceStudents = [];
-          _selectedPromoteStudentIds.clear();
-        } else {
-          _promoteTargetClasses = clsList;
-          _promoteTargetClass = null;
-        }
-      });
-    } catch (e) {
-      widget.snack('Failed to load classes for ${year.name}: $e');
-    }
-  }
-
-  Future<void> _loadPromoteSourceStudents() async {
-    if (_promoteSourceClass == null) {
-      setState(() {
-        _promoteSourceStudents = [];
-        _selectedPromoteStudentIds.clear();
-      });
-      return;
-    }
-    setState(() => _loadingPromoteStudents = true);
-    try {
-      final res = await widget.api.listStudents(
-        classId: _promoteSourceClass!.id,
-        pageSize: 100,
-      );
-      final students = res.data.map((x) => Student.fromJson(x)).toList();
-      setState(() {
-        _promoteSourceStudents = students;
-        _selectedPromoteStudentIds = students.map((s) => s.id).toSet();
-      });
-    } catch (e) {
-      widget.snack('Failed to load students for promotion: $e');
-    } finally {
-      if (mounted) setState(() => _loadingPromoteStudents = false);
-    }
-  }
-
-  Future<void> _executePromoteStudents() async {
-    if (_promoteSourceClass == null || _promoteTargetClass == null) {
-      widget.snack('Select both source and target classes for promotion');
-      return;
-    }
-    if (_selectedPromoteStudentIds.isEmpty) {
-      widget.snack('Select at least one student to promote');
+  void _showMoveAllHigherConfirmationDialog() {
+    final active = _activeYear;
+    if (active == null) {
+      widget.snack('No active academic session found');
       return;
     }
 
-    setState(() => _promoting = true);
-    try {
-      final res = await widget.api.promoteStudents({
-        'source_class_id': _promoteSourceClass!.id,
-        'target_class_id': _promoteTargetClass!.id,
-        'student_ids': _selectedPromoteStudentIds.toList(),
-      });
-      final count = res is Map
-          ? res['promoted']
-          : _selectedPromoteStudentIds.length;
-      widget.snack(
-        'Successfully promoted $count students to ${_promoteTargetClass!.displayName} (${_promoteTargetYear?.name})',
-        error: false,
-      );
-      _loadPromoteSourceStudents();
-      widget.onRefresh();
-    } catch (e) {
-      widget.snack('Failed to promote students: $e');
-    } finally {
-      if (mounted) setState(() => _promoting = false);
-    }
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Row(
+          children: const [
+            Icon(Icons.trending_up, color: Colors.blue, size: 28),
+            SizedBox(width: 10),
+            Text('Move All Students to Higher Grade?'),
+          ],
+        ),
+        content: Text(
+          'This operation will promote all students in the active session (${active.name}) by 1 grade level:\n\n'
+          '• Grade 1 students move to Grade 2\n'
+          '• Grade 2 students move to Grade 3\n'
+          '• ...\n'
+          '• Students in the highest class (e.g. Grade 10) will graduate and be removed from this session.\n\n'
+          'Historical attendance and student records from previous sessions remain preserved in archived sessions.',
+          style: const TextStyle(height: 1.4),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('CANCEL'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              final nav = Navigator.of(ctx);
+              setState(() => _movingAllHigher = true);
+              nav.pop();
+              try {
+                final res = await widget.api.moveAllStudentsHigher(active.id);
+                final data = res is Map ? res['data'] ?? res : res;
+                final graduated = data['graduated_count'] ?? 0;
+                final promoted = data['promoted_count'] ?? 0;
+                widget.snack(
+                  'Annual progression complete! $promoted students promoted to higher grades, $graduated students graduated.',
+                  error: false,
+                );
+                widget.onRefresh();
+              } catch (e) {
+                widget.snack('Failed to move students to higher grade: $e');
+              } finally {
+                if (mounted) setState(() => _movingAllHigher = false);
+              }
+            },
+            child: const Text('CONFIRM ANNUAL PROGRESSION'),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
+    final isMobile = context.isMobile;
+    final active = _activeYear;
+    final archived = _archivedYears;
+
     return SingleChildScrollView(
       padding: const EdgeInsets.all(20),
       child: Column(
@@ -4644,7 +4308,7 @@ class _AcademicSessionsTabState extends State<_AcademicSessionsTab> {
             ),
             child: Padding(
               padding: const EdgeInsets.all(16),
-              child: context.isMobile
+              child: isMobile
                   ? Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -4667,7 +4331,7 @@ class _AcademicSessionsTabState extends State<_AcademicSessionsTab> {
                         ),
                         const SizedBox(height: 8),
                         Text(
-                          'Manage school academic sessions, duplicate class structures, and handle promotions.',
+                          'Manage active academic session, isolated archived records, and student progressions.',
                           style: TextStyle(
                             color: Colors.grey.shade700,
                             fontSize: 12,
@@ -4697,13 +4361,13 @@ class _AcademicSessionsTabState extends State<_AcademicSessionsTab> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                'Academic Sessions & Year Management',
+                                'Academic Sessions & Records Management',
                                 style: Theme.of(context).textTheme.titleLarge
                                     ?.copyWith(fontWeight: FontWeight.bold),
                               ),
                               const SizedBox(height: 4),
                               Text(
-                                'Manage school academic sessions, duplicate class structures, copy staff assignments, and handle student movement or promotions.',
+                                'Maintain immutable historical session records, manage the active session, and handle copy/progression workflows.',
                                 style: TextStyle(
                                   color: Colors.grey.shade700,
                                   fontSize: 13,
@@ -4728,724 +4392,487 @@ class _AcademicSessionsTabState extends State<_AcademicSessionsTab> {
                     ),
             ),
           ),
+          const SizedBox(height: 20),
+
+          // Sub Tab Switcher: Active Session vs Archived Sessions
+          SegmentedButton<int>(
+            segments: [
+              ButtonSegment<int>(
+                value: 0,
+                label: Text(isMobile ? 'Active' : 'Active Session (${active?.name ?? 'None'})'),
+                icon: const Icon(Icons.check_circle_outline, color: Colors.green),
+              ),
+              ButtonSegment<int>(
+                value: 1,
+                label: Text(isMobile ? 'Archived' : 'Archived Sessions (${archived.length})'),
+                icon: const Icon(Icons.archive_outlined, color: Colors.orange),
+              ),
+            ],
+            selected: {_sessionSubTab},
+            onSelectionChanged: (setVal) {
+              setState(() => _sessionSubTab = setVal.first);
+            },
+          ),
           const SizedBox(height: 24),
 
-          // ─── Section 1: Academic Sessions ──────────────────────────────
-          Text(
-            'Academic Sessions',
-            style: Theme.of(
-              context,
-            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 12),
-          if (widget.years.isEmpty)
-            const Card(
-              child: Padding(
-                padding: EdgeInsets.all(20),
-                child: Text('No academic sessions created yet.'),
-              ),
-            )
-          else
-            Wrap(
-              spacing: 16,
-              runSpacing: 16,
-              children: widget.years.map((y) {
-                final isSelected = widget.selectedYear?.id == y.id;
-                return Container(
-                  width: context.isMobile ? double.infinity : 290,
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: isSelected
-                        ? Theme.of(context).primaryColor.withValues(alpha: 0.08)
-                        : Theme.of(context).cardColor,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color: isSelected
-                          ? Theme.of(context).primaryColor
-                          : Colors.grey.shade300,
-                      width: isSelected ? 2 : 1,
+          // ═══════════════════════════════════════════════════════════════════
+          // TAB 0: ACTIVE SESSION VIEW
+          // ═══════════════════════════════════════════════════════════════════
+          if (_sessionSubTab == 0) ...[
+            if (active == null) ...[
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(28),
+                  child: Center(
+                    child: Column(
+                      children: [
+                        Icon(Icons.calendar_today, size: 56, color: Colors.grey.shade400),
+                        const SizedBox(height: 16),
+                        const Text(
+                          'No Active Academic Session',
+                          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'Please create your school\'s academic session to begin taking attendance and managing classes.',
+                          style: TextStyle(color: Colors.grey.shade600),
+                          textAlign: TextAlign.center,
+                        ),
+                        const SizedBox(height: 16),
+                        ElevatedButton.icon(
+                          icon: const Icon(Icons.add),
+                          label: const Text('Create First Session'),
+                          onPressed: _showCreateYearDialog,
+                        ),
+                      ],
                     ),
                   ),
+                ),
+              ),
+            ] else ...[
+              // Active Session Card
+              Card(
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  side: const BorderSide(color: Colors.green, width: 1.5),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.all(20),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Expanded(
-                            child: Text(
-                              y.name,
-                              style: const TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
+                          Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(8),
+                                decoration: BoxDecoration(
+                                  color: Colors.green.shade50,
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: const Icon(Icons.check_circle, color: Colors.green),
                               ),
-                              overflow: TextOverflow.ellipsis,
-                            ),
+                              const SizedBox(width: 12),
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    active.name,
+                                    style: const TextStyle(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    'Period: ${active.startDate.split('T')[0]} to ${active.endDate.split('T')[0]}',
+                                    style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                                  ),
+                                ],
+                              ),
+                            ],
                           ),
-                          if (y.isCurrent)
-                            Chip(
-                              label: const Text(
-                                'ACTIVE',
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.bold,
+                          Row(
+                            children: [
+                              OutlinedButton.icon(
+                                icon: const Icon(Icons.edit_outlined, size: 16),
+                                label: const Text('Edit Session'),
+                                style: OutlinedButton.styleFrom(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 12,
+                                    vertical: 8,
+                                  ),
                                 ),
+                                onPressed: () => _showEditYearDialog(active),
                               ),
-                              backgroundColor: Colors.green,
-                              visualDensity: VisualDensity.compact,
-                            ),
-                          if (y.isArchived) ...[
-                            const SizedBox(width: 4),
-                            Chip(
-                              label: const Text(
-                                'ARCHIVED 🔒',
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.bold,
+                              const SizedBox(width: 8),
+                              OutlinedButton.icon(
+                                icon: const Icon(Icons.archive, size: 16, color: Colors.orange),
+                                label: const Text('Archive Active Session'),
+                                style: OutlinedButton.styleFrom(
+                                  foregroundColor: Colors.orange.shade900,
+                                  side: BorderSide(color: Colors.orange.shade400),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 12,
+                                    vertical: 8,
+                                  ),
                                 ),
+                                onPressed: () => _showArchiveConfirmationDialog(active),
                               ),
-                              backgroundColor: Colors.orange.shade800,
-                              visualDensity: VisualDensity.compact,
-                            ),
-                          ],
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        'Period: ${y.startDate.split('T')[0]} to ${y.endDate.split('T')[0]}',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Colors.grey.shade700,
-                        ),
-                      ),
-                      const SizedBox(height: 14),
-                      Row(
-                        children: [
-                          if (!y.isCurrent)
-                            OutlinedButton(
-                              style: OutlinedButton.styleFrom(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 10,
-                                ),
-                                visualDensity: VisualDensity.compact,
-                              ),
-                              onPressed: () async {
-                                try {
-                                  await widget.api.setAcademicYearCurrent(y.id);
-                                  widget.snack(
-                                    'Set ${y.name} as active session',
-                                    error: false,
-                                  );
-                                  widget.onRefresh();
-                                } catch (e) {
-                                  widget.snack(
-                                    'Failed to set active session: $e',
-                                  );
-                                }
-                              },
-                              child: const Text(
-                                'Set Active',
-                                style: TextStyle(fontSize: 11),
-                              ),
-                            ),
-                          const Spacer(),
-                          TextButton(
-                            style: TextButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 10,
-                              ),
-                              visualDensity: VisualDensity.compact,
-                            ),
-                            onPressed: () async {
-                              try {
-                                if (y.isArchived) {
-                                  await widget.api.unarchiveAcademicYear(y.id);
-                                  widget.snack(
-                                    'Unarchived ${y.name}',
-                                    error: false,
-                                  );
-                                } else {
-                                  await widget.api.archiveAcademicYear(y.id);
-                                  widget.snack(
-                                    'Archived ${y.name} (read-only)',
-                                    error: false,
-                                  );
-                                }
-                                widget.onRefresh();
-                              } catch (e) {
-                                widget.snack('Failed to toggle archive: $e');
-                              }
-                            },
-                            child: Text(
-                              y.isArchived ? 'Unarchive' : 'Archive',
-                              style: TextStyle(
-                                fontSize: 11,
-                                color: y.isArchived
-                                    ? Colors.blue
-                                    : Colors.orange.shade900,
-                              ),
-                            ),
+                            ],
                           ),
                         ],
                       ),
                     ],
                   ),
-                );
-              }).toList(),
-            ),
+                ),
+              ),
+              const SizedBox(height: 28),
 
-          const Divider(height: 48),
-
-          // ─── Section 2: Quick Session Setup Tools ─────────────────────
-          Text(
-            'Session Setup Tools (Avoid Redundant Manual Setup)',
-            style: Theme.of(
-              context,
-            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 12),
-          LayoutBuilder(
-            builder: (context, constraints) {
-              final isWide = constraints.maxWidth > 700;
-              return Flex(
-                direction: isWide ? Axis.horizontal : Axis.vertical,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Tool 1: Copy Classes
-                  Expanded(
-                    flex: isWide ? 1 : 0,
-                    child: Card(
-                      child: Padding(
-                        padding: const EdgeInsets.all(16),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              children: const [
-                                Icon(Icons.copy_all, color: Colors.blue),
-                                SizedBox(width: 8),
-                                Text(
-                                  'Copy Classes to New Session',
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 15,
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 6),
-                            Text(
-                              'Duplicate all grade levels and sections from a past session to a new session in 1 click.',
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: Colors.grey.shade700,
-                              ),
-                            ),
-                            const SizedBox(height: 12),
-                            SearchableDropdown<AcademicYear>(
-                              value: _copyClassSourceYear,
-                              labelText: 'Source Session (Past)',
-                              isDense: true,
-                              items: widget.years,
-                              itemAsString: (y) => y.name,
-                              onChanged: (v) =>
-                                  setState(() => _copyClassSourceYear = v),
-                            ),
-                            const SizedBox(height: 8),
-                            SearchableDropdown<AcademicYear>(
-                              value: _copyClassTargetYear,
-                              labelText: 'Target Session (New)',
-                              isDense: true,
-                              items: widget.years,
-                              itemAsString: (y) => y.name,
-                              onChanged: (v) =>
-                                  setState(() => _copyClassTargetYear = v),
-                            ),
-                            const SizedBox(height: 12),
-                            SizedBox(
-                              width: double.infinity,
-                              child: ElevatedButton.icon(
-                                icon: _copyingClasses
-                                    ? const SizedBox(
-                                        width: 14,
-                                        height: 14,
-                                        child: CircularProgressIndicator(
-                                          strokeWidth: 2,
-                                          color: Colors.white,
-                                        ),
-                                      )
-                                    : const Icon(Icons.file_copy, size: 16),
-                                label: const Text('Copy Classes'),
-                                onPressed:
-                                    _copyingClasses ||
-                                        _copyClassSourceYear == null ||
-                                        _copyClassTargetYear == null
-                                    ? null
-                                    : _executeCopyClasses,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                  if (isWide)
-                    const SizedBox(width: 16)
-                  else
-                    const SizedBox(height: 12),
-                  // Tool 2: Copy Teachers
-                  Expanded(
-                    flex: isWide ? 1 : 0,
-                    child: Card(
-                      child: Padding(
-                        padding: const EdgeInsets.all(16),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              children: const [
-                                Icon(Icons.badge, color: Colors.indigo),
-                                SizedBox(width: 8),
-                                Text(
-                                  'Copy Teacher Assignments',
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 15,
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 6),
-                            Text(
-                              'Copy class teacher assignments from a past session to matching classes in a new session.',
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: Colors.grey.shade700,
-                              ),
-                            ),
-                            const SizedBox(height: 12),
-                            SearchableDropdown<AcademicYear>(
-                              value: _copyTeacherSourceYear,
-                              labelText: 'Source Session (Past)',
-                              isDense: true,
-                              items: widget.years,
-                              itemAsString: (y) => y.name,
-                              onChanged: (v) =>
-                                  setState(() => _copyTeacherSourceYear = v),
-                            ),
-                            const SizedBox(height: 8),
-                            SearchableDropdown<AcademicYear>(
-                              value: _copyTeacherTargetYear,
-                              labelText: 'Target Session (New)',
-                              isDense: true,
-                              items: widget.years,
-                              itemAsString: (y) => y.name,
-                              onChanged: (v) =>
-                                  setState(() => _copyTeacherTargetYear = v),
-                            ),
-                            const SizedBox(height: 12),
-                            SizedBox(
-                              width: double.infinity,
-                              child: ElevatedButton.icon(
-                                icon: _copyingTeachers
-                                    ? const SizedBox(
-                                        width: 14,
-                                        height: 14,
-                                        child: CircularProgressIndicator(
-                                          strokeWidth: 2,
-                                          color: Colors.white,
-                                        ),
-                                      )
-                                    : const Icon(
-                                        Icons.people_outline,
-                                        size: 16,
-                                      ),
-                                label: const Text('Copy Teacher Assignments'),
-                                onPressed:
-                                    _copyingTeachers ||
-                                        _copyTeacherSourceYear == null ||
-                                        _copyTeacherTargetYear == null
-                                    ? null
-                                    : _executeTeacherRollover,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              );
-            },
-          ),
-
-          const Divider(height: 48),
-
-          // ─── Section 3: Student Operations (Move vs Promote) ───────────
-          Wrap(
-            spacing: 12,
-            runSpacing: 12,
-            alignment: WrapAlignment.spaceBetween,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            children: [
+              // Active Session Student Operations
               Text(
-                'Student Operations & Transitions',
-                style: Theme.of(
-                  context,
-                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+                'Active Session Student Movement & Progression',
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
               ),
-              SegmentedButton<int>(
-                segments: [
-                  ButtonSegment<int>(
-                    value: 0,
-                    label: Text(context.isMobile ? 'Move' : 'Move (Same Session)'),
-                    icon: const Icon(Icons.swap_horiz, size: 16),
-                  ),
-                  ButtonSegment<int>(
-                    value: 1,
-                    label: Text(context.isMobile ? 'Promote' : 'Promote (Cross Session)'),
-                    icon: const Icon(Icons.school, size: 16),
-                  ),
-                ],
-                selected: {_studentOperationMode},
-                onSelectionChanged: (setVal) {
-                  setState(() => _studentOperationMode = setVal.first);
-                },
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
+              const SizedBox(height: 12),
 
-          if (_studentOperationMode == 0) ...[
-            // MOVE STUDENTS WITHIN SAME SESSION
-            Text(
-              'Move students between classes/sections within the same academic session.',
-              style: TextStyle(fontSize: 13, color: Colors.grey.shade700),
-            ),
-            const SizedBox(height: 12),
-            Wrap(
-              spacing: 12,
-              runSpacing: 12,
-              crossAxisAlignment: WrapCrossAlignment.center,
-              children: [
-                ConstrainedBox(
-                  constraints: BoxConstraints(
-                    maxWidth: context.isMobile ? double.infinity : 250,
-                  ),
-                  child: SearchableDropdown<SchoolClass>(
-                    value: _moveSourceClass,
-                    labelText: 'Source Class (Current Session)',
-                    isDense: true,
-                    items: widget.classes,
-                    itemAsString: (c) => c.displayName,
-                    onChanged: (v) {
-                      setState(() => _moveSourceClass = v);
-                      _loadMoveSourceStudents();
-                    },
-                  ),
+              // Annual Progression Option
+              Card(
+                color: Colors.blue.shade50.withValues(alpha: 0.5),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  side: BorderSide(color: Colors.blue.shade200),
                 ),
-                const Icon(Icons.arrow_forward),
-                ConstrainedBox(
-                  constraints: BoxConstraints(
-                    maxWidth: context.isMobile ? double.infinity : 250,
-                  ),
-                  child: SearchableDropdown<SchoolClass>(
-                    value: _moveTargetClass,
-                    labelText: 'Target Class (Current Session)',
-                    isDense: true,
-                    items: widget.classes,
-                    itemAsString: (c) => c.displayName,
-                    onChanged: (v) => setState(() => _moveTargetClass = v),
-                  ),
-                ),
-                ElevatedButton.icon(
-                  icon: _moving
-                      ? const SizedBox(
-                          width: 16,
-                          height: 16,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: Colors.white,
-                          ),
-                        )
-                      : const Icon(Icons.swap_horiz, size: 18),
-                  label: const Text('Move Selected Students'),
-                  onPressed: _moving || _selectedMoveStudentIds.isEmpty
-                      ? null
-                      : _executeMoveStudents,
-                ),
-              ],
-            ),
-
-            if (_moveSourceClass != null) ...[
-              const SizedBox(height: 14),
-              Container(
-                decoration: BoxDecoration(
-                  border: Border.all(color: Colors.grey.shade300),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Column(
-                  children: [
-                    Container(
-                      color: Colors.grey.shade100,
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 8,
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Row(
+                    children: [
+                      Icon(Icons.trending_up, color: Colors.blue.shade800, size: 32),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Annual Progression: Move All Students to Higher Grade',
+                              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              'Promotes all students to the next grade level (1st -> 2nd, 2nd -> 3rd, ..., 9th -> 10th). '
+                              'Top-grade graduating students will be cleared from this active session while their historical data stays recorded in past sessions.',
+                              style: TextStyle(fontSize: 12, color: Colors.grey.shade700),
+                            ),
+                          ],
+                        ),
                       ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
+                      const SizedBox(width: 12),
+                      ElevatedButton.icon(
+                        icon: _movingAllHigher
+                            ? const SizedBox(
+                                width: 14,
+                                height: 14,
+                                child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                              )
+                            : const Icon(Icons.arrow_upward, size: 16),
+                        label: const Text('Move All to Higher Grade'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.blue.shade700,
+                          foregroundColor: Colors.white,
+                        ),
+                        onPressed: _movingAllHigher ? null : _showMoveAllHigherConfirmationDialog,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 20),
+
+              // Move Student(s) between classes within current session
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: const [
+                          Icon(Icons.swap_horiz, color: Colors.indigo),
+                          SizedBox(width: 8),
                           Text(
-                            'Students in ${_moveSourceClass!.displayName} (${_moveSourceStudents.length})',
-                            style: const TextStyle(fontWeight: FontWeight.bold),
-                          ),
-                          Row(
-                            children: [
-                              TextButton(
-                                onPressed: () {
-                                  setState(() {
-                                    _selectedMoveStudentIds =
-                                        _moveSourceStudents
-                                            .map((s) => s.id)
-                                            .toSet();
-                                  });
-                                },
-                                child: const Text('Select All'),
-                              ),
-                              TextButton(
-                                onPressed: () {
-                                  setState(
-                                    () => _selectedMoveStudentIds.clear(),
-                                  );
-                                },
-                                child: const Text('Deselect All'),
-                              ),
-                            ],
+                            'Move Student(s) Between Classes',
+                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
                           ),
                         ],
                       ),
-                    ),
-                    if (_loadingMoveStudents)
-                      const Padding(
-                        padding: EdgeInsets.all(20),
-                        child: CircularProgressIndicator(),
-                      )
-                    else if (_moveSourceStudents.isEmpty)
-                      const Padding(
-                        padding: EdgeInsets.all(16),
-                        child: Text('No students found in this class.'),
-                      )
-                    else
-                      ListView.builder(
-                        shrinkWrap: true,
-                        physics: const NeverScrollableScrollPhysics(),
-                        itemCount: _moveSourceStudents.length,
-                        itemBuilder: (_, i) {
-                          final st = _moveSourceStudents[i];
-                          final isSel = _selectedMoveStudentIds.contains(st.id);
-                          return CheckboxListTile(
-                            dense: true,
-                            title: Text('${st.rollNumber} - ${st.fullName}'),
-                            subtitle: Text(
-                              'Admission No: ${st.admissionNumber}',
-                            ),
-                            value: isSel,
-                            onChanged: (val) {
-                              setState(() {
-                                if (val == true) {
-                                  _selectedMoveStudentIds.add(st.id);
-                                } else {
-                                  _selectedMoveStudentIds.remove(st.id);
-                                }
-                              });
-                            },
-                          );
-                        },
+                      const SizedBox(height: 6),
+                      Text(
+                        'Transfer one or multiple students from one class/section to another in this active session.',
+                        style: TextStyle(fontSize: 12, color: Colors.grey.shade700),
                       ),
-                  ],
+                      const SizedBox(height: 16),
+                      Wrap(
+                        spacing: 12,
+                        runSpacing: 12,
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        children: [
+                          ConstrainedBox(
+                            constraints: BoxConstraints(
+                              maxWidth: isMobile ? double.infinity : 240,
+                            ),
+                            child: SearchableDropdown<SchoolClass>(
+                              value: _moveSourceClass,
+                              labelText: 'Source Class',
+                              isDense: true,
+                              items: widget.classes,
+                              itemAsString: (c) => c.displayName,
+                              onChanged: (v) {
+                                setState(() => _moveSourceClass = v);
+                                _loadMoveSourceStudents();
+                              },
+                            ),
+                          ),
+                          const Icon(Icons.arrow_forward),
+                          ConstrainedBox(
+                            constraints: BoxConstraints(
+                              maxWidth: isMobile ? double.infinity : 240,
+                            ),
+                            child: SearchableDropdown<SchoolClass>(
+                              value: _moveTargetClass,
+                              labelText: 'Target Class',
+                              isDense: true,
+                              items: widget.classes,
+                              itemAsString: (c) => c.displayName,
+                              onChanged: (v) => setState(() => _moveTargetClass = v),
+                            ),
+                          ),
+                          ElevatedButton.icon(
+                            icon: _moving
+                                ? const SizedBox(
+                                    width: 14,
+                                    height: 14,
+                                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                                  )
+                                : const Icon(Icons.swap_horiz, size: 16),
+                            label: const Text('Move Selected Students'),
+                            onPressed: _moving || _selectedMoveStudentIds.isEmpty
+                                ? null
+                                : _executeMoveStudents,
+                          ),
+                        ],
+                      ),
+                      if (_moveSourceClass != null) ...[
+                        const SizedBox(height: 14),
+                        Container(
+                          decoration: BoxDecoration(
+                            border: Border.all(color: Colors.grey.shade300),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Column(
+                            children: [
+                              Container(
+                                color: Colors.grey.shade100,
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Text(
+                                      'Students in ${_moveSourceClass!.displayName} (${_moveSourceStudents.length})',
+                                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                                    ),
+                                    Row(
+                                      children: [
+                                        TextButton(
+                                          onPressed: () {
+                                            setState(() {
+                                              _selectedMoveStudentIds =
+                                                  _moveSourceStudents.map((s) => s.id).toSet();
+                                            });
+                                          },
+                                          child: const Text('Select All', style: TextStyle(fontSize: 12)),
+                                        ),
+                                        TextButton(
+                                          onPressed: () {
+                                            setState(() => _selectedMoveStudentIds.clear());
+                                          },
+                                          child: const Text('Deselect All', style: TextStyle(fontSize: 12)),
+                                        ),
+                                      ],
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              if (_loadingMoveStudents)
+                                const Padding(
+                                  padding: EdgeInsets.all(20),
+                                  child: CircularProgressIndicator(),
+                                )
+                              else if (_moveSourceStudents.isEmpty)
+                                const Padding(
+                                  padding: EdgeInsets.all(16),
+                                  child: Text('No students found in this class.'),
+                                )
+                              else
+                                ListView.builder(
+                                  shrinkWrap: true,
+                                  physics: const NeverScrollableScrollPhysics(),
+                                  itemCount: _moveSourceStudents.length,
+                                  itemBuilder: (_, i) {
+                                    final st = _moveSourceStudents[i];
+                                    final isSel = _selectedMoveStudentIds.contains(st.id);
+                                    return CheckboxListTile(
+                                      dense: true,
+                                      title: Text('${st.rollNumber} - ${st.fullName}'),
+                                      subtitle: Text('Admission No: ${st.admissionNumber}'),
+                                      value: isSel,
+                                      onChanged: (val) {
+                                        setState(() {
+                                          if (val == true) {
+                                            _selectedMoveStudentIds.add(st.id);
+                                          } else {
+                                            _selectedMoveStudentIds.remove(st.id);
+                                          }
+                                        });
+                                      },
+                                    );
+                                  },
+                                ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
                 ),
               ),
             ],
           ] else ...[
-            // PROMOTE STUDENTS ACROSS DIFFERENT SESSIONS
-            Text(
-              'Promote students from a class in a past session to a class in a new academic session.',
-              style: TextStyle(fontSize: 13, color: Colors.grey.shade700),
-            ),
-            const SizedBox(height: 12),
-            Wrap(
-              spacing: 12,
-              runSpacing: 12,
-              crossAxisAlignment: WrapCrossAlignment.center,
-              children: [
-                SizedBox(
-                  width: 220,
-                  child: SearchableDropdown<AcademicYear>(
-                    value: _promoteSourceYear,
-                    labelText: 'Source Session (Past)',
-                    isDense: true,
-                    items: widget.years,
-                    itemAsString: (y) => y.name,
-                    onChanged: (v) {
-                      setState(() => _promoteSourceYear = v);
-                      _loadPromoteClasses(v, true);
-                    },
+            // ═══════════════════════════════════════════════════════════════════
+            // TAB 1: ARCHIVED SESSIONS VIEW (READ-ONLY & COPY OPTIONS ONLY)
+            // ═══════════════════════════════════════════════════════════════════
+            if (archived.isEmpty) ...[
+              const Card(
+                child: Padding(
+                  padding: EdgeInsets.all(28),
+                  child: Center(
+                    child: Text(
+                      'No archived sessions yet. When you archive a session or create a new one, past sessions will appear here as permanent, isolated records.',
+                      textAlign: TextAlign.center,
+                    ),
                   ),
                 ),
-                SizedBox(
-                  width: 220,
-                  child: SearchableDropdown<SchoolClass>(
-                    value: _promoteSourceClass,
-                    labelText: 'Source Class',
-                    isDense: true,
-                    items: _promoteSourceClasses,
-                    itemAsString: (c) => c.displayName,
-                    onChanged: (v) {
-                      setState(() => _promoteSourceClass = v);
-                      _loadPromoteSourceStudents();
-                    },
-                  ),
-                ),
-                const Icon(Icons.trending_up, color: Colors.green),
-                SizedBox(
-                  width: 220,
-                  child: SearchableDropdown<AcademicYear>(
-                    value: _promoteTargetYear,
-                    labelText: 'Target Session (New)',
-                    isDense: true,
-                    items: widget.years,
-                    itemAsString: (y) => y.name,
-                    onChanged: (v) {
-                      setState(() => _promoteTargetYear = v);
-                      _loadPromoteClasses(v, false);
-                    },
-                  ),
-                ),
-                SizedBox(
-                  width: 220,
-                  child: SearchableDropdown<SchoolClass>(
-                    value: _promoteTargetClass,
-                    labelText: 'Target Class',
-                    isDense: true,
-                    items: _promoteTargetClasses,
-                    itemAsString: (c) => c.displayName,
-                    onChanged: (v) => setState(() => _promoteTargetClass = v),
-                  ),
-                ),
-                ElevatedButton.icon(
-                  icon: _promoting
-                      ? const SizedBox(
-                          width: 16,
-                          height: 16,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: Colors.white,
-                          ),
-                        )
-                      : const Icon(Icons.school, size: 18),
-                  label: const Text('Promote Selected Students'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.green.shade700,
-                    foregroundColor: Colors.white,
-                  ),
-                  onPressed: _promoting || _selectedPromoteStudentIds.isEmpty
-                      ? null
-                      : _executePromoteStudents,
-                ),
-              ],
-            ),
-
-            if (_promoteSourceClass != null) ...[
+              ),
+            ] else ...[
+              Text(
+                'Archived Sessions (Read-Only & Copy to Active Session)',
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                'These sessions and their attendance data are permanently frozen. You can copy their classes, teachers, or students into the currently active session without sharing any data.',
+                style: TextStyle(fontSize: 12, color: Colors.grey.shade700),
+              ),
               const SizedBox(height: 14),
-              Container(
-                decoration: BoxDecoration(
-                  border: Border.all(color: Colors.grey.shade300),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Column(
-                  children: [
-                    Container(
-                      color: Colors.grey.shade100,
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 8,
-                      ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              ListView.separated(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                itemCount: archived.length,
+                separatorBuilder: (_, _) => const SizedBox(height: 14),
+                itemBuilder: (ctx, idx) {
+                  final y = archived[idx];
+                  return Card(
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
-                            'Students in ${_promoteSourceClass!.displayName} (${_promoteSourceYear?.name}) [${_promoteSourceStudents.length}]',
-                            style: const TextStyle(fontWeight: FontWeight.bold),
-                          ),
                           Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              TextButton(
-                                onPressed: () {
-                                  setState(() {
-                                    _selectedPromoteStudentIds =
-                                        _promoteSourceStudents
-                                            .map((s) => s.id)
-                                            .toSet();
-                                  });
-                                },
-                                child: const Text('Select All'),
+                              Row(
+                                children: [
+                                  Icon(Icons.lock, color: Colors.orange.shade800, size: 20),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    y.name,
+                                    style: const TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 10),
+                                  Chip(
+                                    label: const Text(
+                                      'PERMANENTLY ARCHIVED (READ-ONLY)',
+                                      style: TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 9,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                    backgroundColor: Colors.orange.shade800,
+                                    visualDensity: VisualDensity.compact,
+                                  ),
+                                ],
                               ),
-                              TextButton(
-                                onPressed: () {
-                                  setState(
-                                    () => _selectedPromoteStudentIds.clear(),
-                                  );
-                                },
-                                child: const Text('Deselect All'),
+                              OutlinedButton.icon(
+                                icon: const Icon(Icons.edit_outlined, size: 15),
+                                label: const Text('Edit Name'),
+                                style: OutlinedButton.styleFrom(
+                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                  visualDensity: VisualDensity.compact,
+                                ),
+                                onPressed: () => _showEditYearDialog(y),
                               ),
                             ],
                           ),
+                          const SizedBox(height: 6),
+                          Text(
+                            'Period: ${y.startDate.split('T')[0]} to ${y.endDate.split('T')[0]}',
+                            style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                          ),
+                          const Divider(height: 24),
+                          if (active != null) ...[
+                            Text(
+                              'Copy to Active Session (${active.name}):',
+                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                            ),
+                            const SizedBox(height: 8),
+                            ElevatedButton.icon(
+                              icon: _isCopying
+                                  ? const SizedBox(
+                                      width: 12,
+                                      height: 12,
+                                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                                    )
+                                  : const Icon(Icons.copy_all, size: 15),
+                              label: Text('Copy All (Classes, Teachers, Students) to ${active.name}'),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Theme.of(context).primaryColor,
+                                foregroundColor: Colors.white,
+                              ),
+                              onPressed: _isCopying ? null : () => _executeCopy('all', y),
+                            ),
+                          ] else ...[
+                            Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                color: Colors.grey.shade100,
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: const Text(
+                                'ℹ️ Create an active session first to copy data from this archived session.',
+                                style: TextStyle(fontSize: 12, color: Colors.grey),
+                              ),
+                            ),
+                          ],
                         ],
                       ),
                     ),
-                    if (_loadingPromoteStudents)
-                      const Padding(
-                        padding: EdgeInsets.all(20),
-                        child: CircularProgressIndicator(),
-                      )
-                    else if (_promoteSourceStudents.isEmpty)
-                      const Padding(
-                        padding: EdgeInsets.all(16),
-                        child: Text('No students found in this class.'),
-                      )
-                    else
-                      ListView.builder(
-                        shrinkWrap: true,
-                        physics: const NeverScrollableScrollPhysics(),
-                        itemCount: _promoteSourceStudents.length,
-                        itemBuilder: (_, i) {
-                          final st = _promoteSourceStudents[i];
-                          final isSel = _selectedPromoteStudentIds.contains(
-                            st.id,
-                          );
-                          return CheckboxListTile(
-                            dense: true,
-                            title: Text('${st.rollNumber} - ${st.fullName}'),
-                            subtitle: Text(
-                              'Admission No: ${st.admissionNumber}',
-                            ),
-                            value: isSel,
-                            onChanged: (val) {
-                              setState(() {
-                                if (val == true) {
-                                  _selectedPromoteStudentIds.add(st.id);
-                                } else {
-                                  _selectedPromoteStudentIds.remove(st.id);
-                                }
-                              });
-                            },
-                          );
-                        },
-                      ),
-                  ],
-                ),
+                  );
+                },
               ),
             ],
           ],

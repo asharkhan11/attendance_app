@@ -387,6 +387,8 @@ class ApiService {
   Future<dynamic> listAcademicYears() => get('/api/v1/academic-years');
   Future<dynamic> createAcademicYear(Object data) =>
       post('/api/v1/academic-years', data);
+  Future<dynamic> updateAcademicYear(String id, Object data) =>
+      put('/api/v1/academic-years/$id', data);
   Future<dynamic> setAcademicYearCurrent(String id) =>
       patch('/api/v1/academic-years/$id/set-current');
   Future<dynamic> archiveAcademicYear(String id) =>
@@ -399,6 +401,12 @@ class ApiService {
       post('/api/v1/academic-years/copy-classes', data);
   Future<dynamic> copyTeachers(Object data) =>
       post('/api/v1/academic-years/copy-teachers', data);
+  Future<dynamic> copyStudents(Object data) =>
+      post('/api/v1/academic-years/copy-students', data);
+  Future<dynamic> copyAll(Object data) =>
+      post('/api/v1/academic-years/copy-all', data);
+  Future<dynamic> moveAllStudentsHigher(String id) =>
+      post('/api/v1/academic-years/$id/move-all-higher', {});
 
   Future<ApiPage<dynamic>> listClasses({
     String? academicYearId,

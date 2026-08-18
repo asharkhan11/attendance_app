@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../../../design_system/app_breakpoints.dart';
-import '../../../../design_system/app_spacing.dart';
 import '../../../../design_system/attendance_theme.dart';
 
 class CounterHeader extends StatelessWidget {

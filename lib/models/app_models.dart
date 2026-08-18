@@ -52,15 +52,21 @@ class AcademicYear {
     required this.isArchived,
   });
 
-  factory AcademicYear.fromJson(Map<String, dynamic> json) => AcademicYear(
-        id: json['id'] as String,
-        schoolId: json['school_id'] as String? ?? '',
-        name: json['name'] as String? ?? '',
-        startDate: json['start_date'] as String? ?? '',
-        endDate: json['end_date'] as String? ?? '',
-        isCurrent: json['is_current'] as bool? ?? false,
-        isArchived: json['is_archived'] as bool? ?? false,
-      );
+  factory AcademicYear.fromJson(Map<String, dynamic> json) {
+    String startDate = json['start_date'] as String? ?? '';
+    String endDate = json['end_date'] as String? ?? '';
+    if (startDate.contains('T')) startDate = startDate.split('T')[0];
+    if (endDate.contains('T')) endDate = endDate.split('T')[0];
+    return AcademicYear(
+      id: json['id'] as String,
+      schoolId: json['school_id'] as String? ?? '',
+      name: json['name'] as String? ?? '',
+      startDate: startDate,
+      endDate: endDate,
+      isCurrent: json['is_current'] as bool? ?? false,
+      isArchived: json['is_archived'] as bool? ?? false,
+    );
+  }
 
   Map<String, dynamic> toJson() => {
         'id': id,
@@ -142,6 +148,10 @@ class Student {
   });
 
   factory Student.fromJson(Map<String, dynamic> json) {
+    String? dob = json['dob'] as String?;
+    if (dob != null && dob.isNotEmpty && dob.contains('T')) {
+      dob = dob.split('T')[0];
+    }
     return Student(
       id: json['id'] ?? '',
       schoolId: json['school_id'],
@@ -150,7 +160,7 @@ class Student {
       rollNumber: json['roll_number']?.toString() ?? '',
       fullName: json['full_name'] ?? '',
       gender: json['gender'],
-      dob: json['dob'],
+      dob: dob,
       guardianName: json['guardian_name'],
       guardianPhone: json['guardian_phone'],
       isActive: json['is_active'] ?? true,

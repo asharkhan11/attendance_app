@@ -912,7 +912,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen>
                 shrinkWrap: true,
                 physics: const NeverScrollableScrollPhysics(),
                 itemCount: _defaultersData.length,
-                separatorBuilder: (_, __) => const Divider(height: 1),
+                separatorBuilder: (_, _) => const Divider(height: 1),
                 itemBuilder: (context, i) {
                   final d = _defaultersData[i];
                   final name =

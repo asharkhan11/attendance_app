@@ -6,7 +6,6 @@ import '../models/app_models.dart';
 import '../services/api_service.dart';
 import '../utils/app_logger.dart';
 import '../services/download_helper.dart';
-import '../widgets/searchable_dropdown.dart';
 import '../widgets/profile_modal.dart';
 import 'mark_attendance_screen.dart';
 
@@ -627,56 +626,6 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
     );
   }
 
-  Widget _miniStatChip(String label, Color color) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: color.withValues(alpha: 0.4)),
-      ),
-      child: Text(
-        label,
-        style: TextStyle(
-          fontSize: 12,
-          fontWeight: FontWeight.bold,
-          color: color,
-        ),
-      ),
-    );
-  }
-
-  Widget _profileDetailTile(
-    IconData icon,
-    String label,
-    String value, {
-    Color? color,
-  }) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6.0),
-      child: Row(
-        children: [
-          Icon(icon, size: 20, color: Colors.grey.shade600),
-          const SizedBox(width: 12),
-          Text(
-            '$label: ',
-            style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 14),
-          ),
-          Expanded(
-            child: Text(
-              value,
-              style: TextStyle(
-                fontWeight: FontWeight.bold,
-                fontSize: 14,
-                color: color ?? Colors.black87,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final user = Provider.of<AuthProvider>(context).currentUser;
@@ -943,7 +892,7 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
                                           Icons.logout,
                                           color: Colors.redAccent,
                                         ),
-                                        const SizedBox(width: 8),
+                                        SizedBox(width: 8),
                                         Text(
                                           'Logout',
                                           style: TextStyle(
