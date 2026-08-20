@@ -52,7 +52,7 @@ class AppVerticalNavbar extends ConsumerWidget {
     final isDark = ref.watch(themeProvider) == ThemeMode.dark;
 
     return Container(
-      width: isExpanded ? 240.0 : 72.0,
+      width: isExpanded ? 250.0 : 72.0,
       color: theme.colorScheme.surface,
       child: Column(
         children: [

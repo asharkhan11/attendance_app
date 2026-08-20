@@ -1,4 +1,6 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:file_picker/file_picker.dart';
 import '../providers/auth_provider.dart';
@@ -13,6 +15,18 @@ import '../design_system/app_spacing.dart';
 import '../features/admin/presentation/widgets/admin_navigation.dart';
 import '../features/admin/presentation/screens/admin_overview_screen.dart';
 import '../features/admin/presentation/screens/analytics_screen.dart';
+
+// Helper for properly formatting CSV field with quotes and escaped inner quotes
+String _csvEscape(String? value) {
+  if (value == null) return '';
+  if (value.contains(',') ||
+      value.contains('"') ||
+      value.contains('\n') ||
+      value.contains('\r')) {
+    return '"${value.replaceAll('"', '""')}"';
+  }
+  return value;
+}
 
 // ─── Admin Dashboard ────────────────────────────────────────────────────────────
 
@@ -106,9 +120,9 @@ class _AdminDashboardState extends State<AdminDashboard> {
   Widget build(BuildContext context) {
     final isMobile = context.isMobile;
 
-    // Tab index mapping — Overview = 0 (NEW), all originals shifted +1
+    // 9 tabs: 0: Overview, 1: Academic Session, 2: Attendance Session, 3: Analytics, 4: Classes, 5: Students, 6: Teachers, 7: Reports, 8: School Days
     final tabs = [
-      // 0: Overview (NEW)
+      // 0: Overview
       AdminOverviewScreen(
         api: _api,
         selectedYear: _selectedYear,
@@ -116,7 +130,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
         snack: _snack,
         navigateTo: (i) => setState(() => _selectedIndex = i),
       ),
-      // 1: Sessions (was 0)
+      // 1: Academic Session
       _AcademicSessionsTab(
         api: _api,
         years: _years,
@@ -126,14 +140,22 @@ class _AdminDashboardState extends State<AdminDashboard> {
         onRefresh: _loadSharedData,
         snack: _snack,
       ),
-      // 2: Analytics (was 1)
+      // 2: Attendance Session (NEW)
+      _AttendanceSessionsTab(
+        api: _api,
+        classes: _classes,
+        teachers: _teachers,
+        selectedYear: _selectedYear,
+        snack: _snack,
+      ),
+      // 3: Analytics
       AnalyticsScreen(
         api: _api,
         classes: _classes,
         selectedYear: _selectedYear,
         snack: _snack,
       ),
-      // 3: Classes (was 2)
+      // 4: Classes
       _ClassesTab(
         api: _api,
         classes: _classes,
@@ -142,14 +164,14 @@ class _AdminDashboardState extends State<AdminDashboard> {
         onRefresh: _loadSharedData,
         snack: _snack,
       ),
-      // 4: Students (was 3)
+      // 5: Students
       _StudentsTab(
         api: _api,
         classes: _classes,
         selectedYear: _selectedYear,
         snack: _snack,
       ),
-      // 5: Teachers (was 4)
+      // 6: Teachers
       _TeachersTab(
         api: _api,
         teachers: _teachers,
@@ -157,14 +179,14 @@ class _AdminDashboardState extends State<AdminDashboard> {
         onRefresh: _loadSharedData,
         snack: _snack,
       ),
-      // 6: Reports (was 5)
+      // 7: Reports
       _ReportsTab(
         api: _api,
         classes: _classes,
         selectedYear: _selectedYear,
         snack: _snack,
       ),
-      // 7: School Days (was 6)
+      // 8: School Days
       _SchoolDaysTab(api: _api, selectedYear: _selectedYear, snack: _snack),
     ];
 
@@ -348,7 +370,874 @@ class _AdminDashboardState extends State<AdminDashboard> {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// TAB 2: Classes — List, Create, Delete, Assign Teacher
+// TAB 2: Attendance Sessions — Date Navigator, Class/Status Filters, Reopen Finalized Sessions
+// ═══════════════════════════════════════════════════════════════════════════════
+
+class _AttendanceSessionsTab extends StatefulWidget {
+  final ApiService api;
+  final List<SchoolClass> classes;
+  final List<User> teachers;
+  final AcademicYear? selectedYear;
+  final void Function(String, {bool error}) snack;
+
+  const _AttendanceSessionsTab({
+    required this.api,
+    required this.classes,
+    required this.teachers,
+    required this.selectedYear,
+    required this.snack,
+  });
+
+  @override
+  State<_AttendanceSessionsTab> createState() => _AttendanceSessionsTabState();
+}
+
+class _AttendanceSessionsTabState extends State<_AttendanceSessionsTab> {
+  DateTime _selectedDate = DateTime.now();
+  final _searchCtrl = TextEditingController();
+  SchoolClass? _filterClass;
+  String _statusFilter = 'all'; // 'all', 'open', 'closed'
+  bool _loading = false;
+  List<AttendanceSession> _sessions = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSessions();
+  }
+
+  @override
+  void didUpdateWidget(covariant _AttendanceSessionsTab oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.selectedYear?.id != widget.selectedYear?.id) {
+      _loadSessions();
+    }
+  }
+
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
+  }
+
+  String get _selectedDateStr {
+    return "${_selectedDate.year}-${_selectedDate.month.toString().padLeft(2, '0')}-${_selectedDate.day.toString().padLeft(2, '0')}";
+  }
+
+  bool get _isToday {
+    final now = DateTime.now();
+    return _selectedDate.year == now.year &&
+        _selectedDate.month == now.month &&
+        _selectedDate.day == now.day;
+  }
+
+  String _formatDisplayDate(DateTime d) {
+    const weekdays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    const months = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+    ];
+    final weekday = weekdays[d.weekday - 1];
+    final month = months[d.month - 1];
+    return '$weekday, $month ${d.day}, ${d.year}';
+  }
+
+  void _changeDate(int days) {
+    setState(() {
+      _selectedDate = _selectedDate.add(Duration(days: days));
+    });
+    _loadSessions();
+  }
+
+  Future<void> _pickDate() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _selectedDate,
+      firstDate: DateTime(2020),
+      lastDate: DateTime(2035),
+    );
+    if (picked != null && picked != _selectedDate) {
+      setState(() {
+        _selectedDate = picked;
+      });
+      _loadSessions();
+    }
+  }
+
+  void _goToToday() {
+    setState(() {
+      _selectedDate = DateTime.now();
+    });
+    _loadSessions();
+  }
+
+  Future<void> _loadSessions() async {
+    setState(() => _loading = true);
+    try {
+      final dateStr = _selectedDateStr;
+      final res = await widget.api.listSessions(
+        classId: _filterClass?.id,
+        from: dateStr,
+        to: dateStr,
+        pageSize: 200,
+      );
+      final rawList = res.data
+          .map((x) => AttendanceSession.fromJson(x as Map<String, dynamic>))
+          .toList();
+      setState(() {
+        _sessions = rawList;
+      });
+    } catch (e) {
+      widget.snack('Error loading attendance sessions: $e');
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _reopenSession(AttendanceSession s) async {
+    try {
+      await widget.api.reopenAttendanceSession(s.id);
+      widget.snack(
+        'Session for Period ${s.periodNumber} reopened successfully! Teachers can now mark attendance.',
+        error: false,
+      );
+      await _loadSessions();
+    } catch (e) {
+      widget.snack('Failed to reopen session: $e');
+    }
+  }
+
+  void _confirmReopenSession(AttendanceSession s, String className) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Row(
+          children: const [
+            Icon(Icons.lock_open_rounded, color: Color(0xFF4F46E5), size: 22),
+            SizedBox(width: 8),
+            Text('Reopen Attendance Session'),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Are you sure you want to reopen this finalized attendance session? Once reopened, the assigned teacher will be able to edit attendance marks again on their dashboard.',
+            ),
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.grey.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.grey.shade300),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Class: $className',
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Date: $_selectedDateStr • Period: ${s.periodNumber}',
+                    style: TextStyle(color: Colors.grey.shade800, fontSize: 13),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Session ID: ${s.id}',
+                    style: const TextStyle(fontSize: 11, fontFamily: 'monospace'),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('CANCEL'),
+          ),
+          ElevatedButton.icon(
+            icon: const Icon(Icons.lock_open_rounded, size: 16),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF4F46E5),
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () {
+              Navigator.pop(ctx);
+              _reopenSession(s);
+            },
+            label: const Text('CONFIRM REOPEN'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (widget.selectedYear == null) {
+      return Scaffold(
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                Icons.access_time_outlined,
+                size: 64,
+                color: Colors.orange.shade400,
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'No Academic Session Selected',
+                style: Theme.of(
+                  context,
+                ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'Please create or select an Academic Session in the "Academic Session" tab to view attendance sessions.',
+                style: TextStyle(color: Colors.grey),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    final isArchived = widget.selectedYear?.isArchived == true;
+    final query = _searchCtrl.text.trim().toLowerCase();
+
+    // Filter sessions for the active date
+    final filtered = _sessions.where((s) {
+      final isOpen = s.status == 'open' && !s.isFinalized;
+      if (_statusFilter == 'open' && !isOpen) {
+        return false;
+      }
+      if (_statusFilter == 'closed' && isOpen) {
+        return false;
+      }
+      if (query.isNotEmpty) {
+        final assignedTeacher = widget.teachers
+            .where((t) => t.id == s.teacherId)
+            .firstOrNull;
+        final teacherName = assignedTeacher?.fullName ?? '';
+        final cls = widget.classes.where((c) => c.id == s.classId).firstOrNull;
+        final className = cls?.displayName ?? '';
+        final searchTarget =
+            '${s.id} $className $teacherName ${s.sessionDate} period ${s.periodNumber}'
+                .toLowerCase();
+        if (!searchTarget.contains(query)) return false;
+      }
+      return true;
+    }).toList();
+
+    final openCount = _sessions.where((s) => s.status == 'open' && !s.isFinalized).length;
+    final finalizedCount = _sessions.length - openCount;
+
+    return Scaffold(
+      body: Column(
+        children: [
+          if (isArchived)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(10),
+              color: Colors.orange.shade800,
+              child: Row(
+                children: const [
+                  Icon(Icons.lock, color: Colors.white, size: 20),
+                  SizedBox(width: 8),
+                  Text(
+                    'This Academic Session is Archived (Read-Only Mode). Modifications are locked.',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 13,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+          // Date Selector Header Bar
+          Container(
+            width: double.infinity,
+            margin: const EdgeInsets.all(12),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.surface,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: Theme.of(context).primaryColor.withValues(alpha: 0.25),
+                width: 1.2,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.03),
+                  blurRadius: 6,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: Wrap(
+              spacing: 12,
+              runSpacing: 10,
+              alignment: WrapAlignment.spaceBetween,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                // Date Navigator Controls
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    IconButton(
+                      icon: const Icon(Icons.chevron_left),
+                      tooltip: 'Previous Day',
+                      onPressed: () => _changeDate(-1),
+                    ),
+                    InkWell(
+                      onTap: _pickDate,
+                      borderRadius: BorderRadius.circular(8),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 8,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Theme.of(
+                            context,
+                          ).primaryColor.withValues(alpha: 0.08),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                            color: Theme.of(
+                              context,
+                            ).primaryColor.withValues(alpha: 0.3),
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.calendar_month_rounded,
+                              size: 18,
+                              color: Theme.of(context).primaryColor,
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              _formatDisplayDate(_selectedDate),
+                              style: TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.bold,
+                                color: Theme.of(context).primaryColor,
+                              ),
+                            ),
+                            if (_isToday) ...[
+                              const SizedBox(width: 8),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 6,
+                                  vertical: 2,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: Colors.green.shade600,
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                                child: const Text(
+                                  'TODAY',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                            ],
+                            const SizedBox(width: 4),
+                            const Icon(Icons.arrow_drop_down, size: 20),
+                          ],
+                        ),
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.chevron_right),
+                      tooltip: 'Next Day',
+                      onPressed: () => _changeDate(1),
+                    ),
+                    if (!_isToday)
+                      TextButton.icon(
+                        icon: const Icon(Icons.today, size: 16),
+                        label: const Text('Today'),
+                        onPressed: _goToToday,
+                      ),
+                  ],
+                ),
+
+                // Sessions Summary Badges for this date
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 5,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.blue.shade50,
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(color: Colors.blue.shade200),
+                      ),
+                      child: Text(
+                        'Total: ${_sessions.length}',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.blue.shade900,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 5,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.green.shade50,
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(color: Colors.green.shade200),
+                      ),
+                      child: Text(
+                        '● Open: $openCount',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.green.shade900,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 5,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.amber.shade50,
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(color: Colors.amber.shade300),
+                      ),
+                      child: Text(
+                        '🔒 Finalized: $finalizedCount',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.amber.shade900,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+
+          // Filters & Search Bar
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+            child: Wrap(
+              spacing: 10,
+              runSpacing: 8,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                SizedBox(
+                  width: 220,
+                  child: SearchableDropdown<SchoolClass?>(
+                    value: _filterClass,
+                    labelText: 'Filter by Class',
+                    isDense: true,
+                    items: [null, ...widget.classes],
+                    itemAsString: (c) =>
+                        c == null ? 'All Classes' : c.displayName,
+                    onChanged: (v) {
+                      setState(() => _filterClass = v);
+                      _loadSessions();
+                    },
+                  ),
+                ),
+                SizedBox(
+                  width: 200,
+                  child: DropdownButtonFormField<String>(
+                    initialValue: _statusFilter,
+                    isExpanded: true,
+                    decoration: const InputDecoration(
+                      labelText: 'Status',
+                      border: OutlineInputBorder(),
+                      isDense: true,
+                    ),
+                    items: const [
+                      DropdownMenuItem(
+                        value: 'all',
+                        child: Text('All Statuses', overflow: TextOverflow.ellipsis),
+                      ),
+                      DropdownMenuItem(
+                        value: 'open',
+                        child: Text('Open / Not Finalized', overflow: TextOverflow.ellipsis),
+                      ),
+                      DropdownMenuItem(
+                        value: 'closed',
+                        child: Text('Finalized / Closed', overflow: TextOverflow.ellipsis),
+                      ),
+                    ],
+                    onChanged: (v) {
+                      if (v != null) setState(() => _statusFilter = v);
+                    },
+                  ),
+                ),
+                ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 240),
+                  child: TextField(
+                    controller: _searchCtrl,
+                    decoration: InputDecoration(
+                      labelText: 'Search Sessions',
+                      hintText: 'Class, teacher, ID...',
+                      border: const OutlineInputBorder(),
+                      isDense: true,
+                      prefixIcon: const Icon(Icons.search, size: 18),
+                      suffixIcon: _searchCtrl.text.isNotEmpty
+                          ? IconButton(
+                              icon: const Icon(Icons.clear, size: 16),
+                              onPressed: () => setState(() => _searchCtrl.clear()),
+                            )
+                          : null,
+                    ),
+                    onChanged: (_) => setState(() {}),
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.refresh),
+                  tooltip: 'Refresh Sessions',
+                  onPressed: _loadSessions,
+                ),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 8),
+
+          // Sessions List for Selected Date
+          Expanded(
+            child: _loading
+                ? const Center(child: CircularProgressIndicator())
+                : filtered.isEmpty
+                ? Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.event_busy_outlined,
+                          size: 56,
+                          color: Colors.grey.shade400,
+                        ),
+                        const SizedBox(height: 12),
+                        Text(
+                          'No attendance sessions for ${_formatDisplayDate(_selectedDate)}',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.grey.shade700,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          _filterClass != null || _statusFilter != 'all' || query.isNotEmpty
+                              ? 'Try adjusting your class filter or search query.'
+                              : 'Teachers have not started attendance sessions on this date yet.',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey.shade600,
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        if (!_isToday)
+                          ElevatedButton.icon(
+                            icon: const Icon(Icons.today, size: 16),
+                            label: const Text("Go to Today's Sessions"),
+                            onPressed: _goToToday,
+                          ),
+                      ],
+                    ),
+                  )
+                : ListView.builder(
+                    padding: const EdgeInsets.only(
+                      left: 12,
+                      right: 12,
+                      bottom: 24,
+                    ),
+                    itemCount: filtered.length,
+                    itemBuilder: (ctx, idx) {
+                      final s = filtered[idx];
+                      final cls = widget.classes
+                          .where((c) => c.id == s.classId)
+                          .firstOrNull;
+                      final className = cls?.displayName ?? 'Class ${s.classId}';
+                      final teacher = widget.teachers
+                          .where((t) => t.id == s.teacherId)
+                          .firstOrNull;
+                      final teacherName = teacher?.fullName ?? 'Teacher ID: ${s.teacherId}';
+                      final isOpen = s.status == 'open' && !s.isFinalized;
+
+                      return Card(
+                        margin: const EdgeInsets.symmetric(vertical: 5),
+                        elevation: 0.8,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          side: BorderSide(
+                            color: isOpen
+                                ? Colors.green.withValues(alpha: 0.4)
+                                : Colors.grey.shade300,
+                          ),
+                        ),
+                        child: Padding(
+                          padding: const EdgeInsets.all(12),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.center,
+                            children: [
+                              // Status icon
+                              CircleAvatar(
+                                radius: 20,
+                                backgroundColor: isOpen
+                                    ? Colors.green.shade50
+                                    : Colors.grey.shade100,
+                                child: Icon(
+                                  isOpen
+                                      ? Icons.lock_open_rounded
+                                      : Icons.lock_rounded,
+                                  color: isOpen
+                                      ? Colors.green.shade700
+                                      : Colors.grey.shade700,
+                                  size: 20,
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+
+                              // Main Details
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      children: [
+                                        Text(
+                                          className,
+                                          style: const TextStyle(
+                                            fontSize: 15,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                        const SizedBox(width: 8),
+                                        Container(
+                                          padding:
+                                              const EdgeInsets.symmetric(
+                                            horizontal: 6,
+                                            vertical: 1,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            color: Colors.blue.shade50,
+                                            borderRadius:
+                                                BorderRadius.circular(4),
+                                            border: Border.all(
+                                              color: Colors.blue.shade200,
+                                            ),
+                                          ),
+                                          child: Text(
+                                            'Period ${s.periodNumber}',
+                                            style: TextStyle(
+                                              fontSize: 11,
+                                              fontWeight: FontWeight.w600,
+                                              color: Colors.blue.shade900,
+                                            ),
+                                          ),
+                                        ),
+                                        const SizedBox(width: 6),
+                                        // Status badge
+                                        Container(
+                                          padding:
+                                              const EdgeInsets.symmetric(
+                                            horizontal: 6,
+                                            vertical: 1,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            color: isOpen
+                                                ? Colors.green.shade50
+                                                : (s.isFinalized
+                                                    ? Colors.amber.shade50
+                                                    : Colors.grey.shade200),
+                                            borderRadius:
+                                                BorderRadius.circular(4),
+                                            border: Border.all(
+                                              color: isOpen
+                                                  ? Colors.green.shade300
+                                                  : (s.isFinalized
+                                                      ? Colors.amber.shade400
+                                                      : Colors.grey.shade400),
+                                            ),
+                                          ),
+                                          child: Text(
+                                            isOpen
+                                                ? '● OPEN (NOT FINALIZED)'
+                                                : (s.isFinalized
+                                                    ? '🔒 FINALIZED'
+                                                    : '🔒 CLOSED'),
+                                            style: TextStyle(
+                                              fontSize: 10,
+                                              fontWeight: FontWeight.bold,
+                                              color: isOpen
+                                                  ? Colors.green.shade900
+                                                  : (s.isFinalized
+                                                      ? Colors.amber.shade900
+                                                      : Colors.grey.shade800),
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      'Teacher: $teacherName',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: Colors.grey.shade700,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 6),
+                                    // Session ID chip with copy action
+                                    InkWell(
+                                      onTap: () {
+                                        Clipboard.setData(
+                                          ClipboardData(text: s.id),
+                                        );
+                                        widget.snack(
+                                          'Session ID copied: ${s.id}',
+                                          error: false,
+                                        );
+                                      },
+                                      borderRadius: BorderRadius.circular(4),
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 6,
+                                          vertical: 2,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: Colors.grey.withValues(
+                                            alpha: 0.1,
+                                          ),
+                                          borderRadius:
+                                              BorderRadius.circular(4),
+                                          border: Border.all(
+                                            color: Colors.grey.shade300,
+                                            width: 0.8,
+                                          ),
+                                        ),
+                                        child: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Text(
+                                              'Session ID: ${s.id}',
+                                              style: TextStyle(
+                                                fontSize: 11,
+                                                fontFamily: 'monospace',
+                                                color: Colors.grey.shade800,
+                                              ),
+                                            ),
+                                            const SizedBox(width: 4),
+                                            Icon(
+                                              Icons.copy,
+                                              size: 12,
+                                              color: Colors.grey.shade600,
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+
+                              // Reopen Action Button
+                              if (!isOpen)
+                                ElevatedButton.icon(
+                                  icon: const Icon(
+                                    Icons.lock_open_rounded,
+                                    size: 15,
+                                  ),
+                                  label: const Text('Reopen Session'),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: const Color(0xFF4F46E5),
+                                    foregroundColor: Colors.white,
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 14,
+                                      vertical: 10,
+                                    ),
+                                  ),
+                                  onPressed: isArchived
+                                      ? null
+                                      : () => _confirmReopenSession(
+                                          s,
+                                          className,
+                                        ),
+                                )
+                              else
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 10,
+                                    vertical: 6,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: Colors.green.shade50,
+                                    borderRadius:
+                                        BorderRadius.circular(6),
+                                    border: Border.all(
+                                      color: Colors.green.shade200,
+                                    ),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(
+                                        Icons.check_circle_outline,
+                                        size: 14,
+                                        color: Colors.green.shade700,
+                                      ),
+                                      const SizedBox(width: 4),
+                                      Text(
+                                        'Active (Open)',
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.bold,
+                                          color: Colors.green.shade800,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// TAB: Classes — List, Create, Delete, Assign Teacher
 // ═══════════════════════════════════════════════════════════════════════════════
 
 class _ClassesTab extends StatefulWidget {
@@ -440,13 +1329,81 @@ class _ClassesTabState extends State<_ClassesTab> {
     );
   }
 
+  void _showEditClassDialog(SchoolClass c) {
+    final gradeCtrl = TextEditingController(text: '${c.gradeLevel}');
+    final sectionCtrl = TextEditingController(text: c.section);
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('Edit ${c.displayName}'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: gradeCtrl,
+                decoration: const InputDecoration(
+                  labelText: 'Grade Level (e.g. 10)',
+                  border: OutlineInputBorder(),
+                ),
+                keyboardType: TextInputType.number,
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: sectionCtrl,
+                decoration: const InputDecoration(
+                  labelText: 'Section (e.g. A)',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('CANCEL'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              final nav = Navigator.of(ctx);
+              final grade = int.tryParse(gradeCtrl.text.trim()) ?? 0;
+              final section = sectionCtrl.text.trim();
+              if (grade < 1 || grade > 12) {
+                widget.snack('Grade level must be between 1 and 12');
+                return;
+              }
+              if (section.isEmpty) {
+                widget.snack('Section cannot be empty');
+                return;
+              }
+              try {
+                await widget.api.updateClass(c.id, {
+                  'grade_level': grade,
+                  'section': section,
+                });
+                nav.pop();
+                widget.snack('Class updated successfully', error: false);
+                widget.onRefresh();
+              } catch (e) {
+                widget.snack('Failed to update class: \$e');
+              }
+            },
+            child: const Text('SAVE'),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _confirmDeleteClass(SchoolClass c) {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Delete Class'),
         content: Text(
-          'Are you sure you want to delete ${c.displayName}? This cannot be undone.',
+          'Are you sure you want to delete ${c.displayName}?\n\nThis will also permanently delete ALL students in this class. This cannot be undone.',
         ),
         actions: [
           TextButton(
@@ -535,7 +1492,7 @@ class _ClassesTabState extends State<_ClassesTab> {
               ),
               const SizedBox(height: 8),
               const Text(
-                'Please create or select an Academic Session in the "Sessions" tab to view and manage classes.',
+                'Please create or select an Academic Session in the "Academic Session" tab to view and manage classes.',
                 style: TextStyle(color: Colors.grey),
               ),
             ],
@@ -554,7 +1511,7 @@ class _ClassesTabState extends State<_ClassesTab> {
       final teacherName = c.classTeacherName ?? assignedTeacher?.fullName ?? '';
       final teacherPhone = assignedTeacher?.phone ?? '';
       final searchTarget =
-          'grade ${c.gradeLevel} section ${c.section} ${c.displayName} $teacherName $teacherPhone'
+          'grade ${c.gradeLevel} section ${c.section} ${c.displayName} ${c.id} $teacherName $teacherPhone'
               .toLowerCase();
       return searchTarget.contains(query);
     }).toList();
@@ -599,12 +1556,12 @@ class _ClassesTabState extends State<_ClassesTab> {
               children: [
                 Expanded(
                   child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 280),
+                    constraints: const BoxConstraints(maxWidth: 320),
                     child: TextField(
                       controller: _searchCtrl,
                       decoration: InputDecoration(
                         labelText: 'Search Classes',
-                        hintText: 'Grade, section, teacher, phone...',
+                        hintText: 'Grade, section, class ID, teacher...',
                         border: const OutlineInputBorder(),
                         isDense: true,
                         suffixIcon: Row(
@@ -659,11 +1616,72 @@ class _ClassesTabState extends State<_ClassesTab> {
                           leading: CircleAvatar(child: Text('${c.gradeLevel}')),
                           title: Text(
                             'Grade ${c.gradeLevel} - Section ${c.section}',
+                            style: const TextStyle(fontWeight: FontWeight.w600),
                           ),
-                          subtitle: Text(teacherSubtitle),
+                          subtitle: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const SizedBox(height: 2),
+                              Text(teacherSubtitle),
+                              const SizedBox(height: 6),
+                              InkWell(
+                                onTap: () {
+                                  Clipboard.setData(ClipboardData(text: c.id));
+                                  widget.snack('Class ID copied to clipboard: ${c.id}', error: false);
+                                },
+                                borderRadius: BorderRadius.circular(4),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                  decoration: BoxDecoration(
+                                    color: Theme.of(context).primaryColor.withValues(alpha: 0.08),
+                                    borderRadius: BorderRadius.circular(4),
+                                    border: Border.all(
+                                      color: Theme.of(context).primaryColor.withValues(alpha: 0.25),
+                                      width: 0.8,
+                                    ),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Text(
+                                        'ID: ${c.id}',
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          fontFamily: 'monospace',
+                                          fontWeight: FontWeight.w600,
+                                          color: Theme.of(context).primaryColor,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 6),
+                                      Icon(
+                                        Icons.copy,
+                                        size: 13,
+                                        color: Theme.of(context).primaryColor,
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
                           trailing: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
+                              IconButton(
+                                icon: const Icon(Icons.copy, size: 18),
+                                tooltip: 'Copy Class ID',
+                                onPressed: () {
+                                  Clipboard.setData(ClipboardData(text: c.id));
+                                  widget.snack('Class ID copied to clipboard: ${c.id}', error: false);
+                                },
+                              ),
+                              IconButton(
+                                icon: const Icon(Icons.edit, size: 20),
+                                tooltip: 'Edit Class',
+                                onPressed: isArchived
+                                    ? null
+                                    : () => _showEditClassDialog(c),
+                              ),
                               IconButton(
                                 icon: const Icon(Icons.person_add, size: 20),
                                 tooltip: 'Assign Teacher',
@@ -759,6 +1777,32 @@ class _TeachersTabState extends State<_TeachersTab> {
   void dispose() {
     _searchCtrl.dispose();
     super.dispose();
+  }
+
+  void _exportTeachers() {
+    try {
+      if (widget.teachers.isEmpty) {
+        widget.snack('No teachers to export');
+        return;
+      }
+      final buffer = StringBuffer();
+      buffer.writeln('full_name,email,phone,password');
+      for (final t in widget.teachers) {
+        final row = [
+          _csvEscape(t.fullName),
+          _csvEscape(t.email),
+          _csvEscape(t.phone ?? ''),
+          _csvEscape('********'),
+        ].join(',');
+        buffer.writeln(row);
+      }
+      final bytes = Uint8List.fromList(utf8.encode(buffer.toString()));
+      final dateStr = DateTime.now().toIso8601String().split('T')[0];
+      triggerDownload(bytes, 'teachers_export_$dateStr.csv', 'text/csv');
+      widget.snack('Teachers exported successfully (${widget.teachers.length} teachers)', error: false);
+    } catch (e) {
+      widget.snack('Failed to export teachers: $e');
+    }
   }
 
   Future<void> _bulkImportTeachers() async {
@@ -1170,11 +2214,27 @@ class _TeachersTabState extends State<_TeachersTab> {
                             } catch (e) {
                               widget.snack('Failed to download template: $e');
                             }
+                          } else if (val == 'export') {
+                            _exportTeachers();
                           } else if (val == 'import' && !isArchived) {
                             _bulkImportTeachers();
                           }
                         },
                         itemBuilder: (ctx) => [
+                          const PopupMenuItem(
+                            value: 'export',
+                            child: Row(
+                              children: [
+                                Icon(
+                                  Icons.file_download_outlined,
+                                  size: 18,
+                                  color: Colors.indigo,
+                                ),
+                                SizedBox(width: 8),
+                                Text('Export Teachers CSV'),
+                              ],
+                            ),
+                          ),
                           const PopupMenuItem(
                             value: 'download',
                             child: Row(
@@ -1193,17 +2253,17 @@ class _TeachersTabState extends State<_TeachersTab> {
                             const PopupMenuItem(
                               value: 'import',
                               child: Row(
-                                children: [
-                                  Icon(
-                                    Icons.upload_file,
-                                    size: 18,
-                                    color: Colors.green,
-                                  ),
-                                  SizedBox(width: 8),
-                                  Text('Bulk CSV Import'),
-                                ],
-                              ),
+                              children: [
+                                Icon(
+                                  Icons.upload_file,
+                                  size: 18,
+                                  color: Colors.green,
+                                ),
+                                SizedBox(width: 8),
+                                Text('Bulk CSV Import'),
+                              ],
                             ),
+                          ),
                         ],
                       ),
                     ],
@@ -1244,8 +2304,17 @@ class _TeachersTabState extends State<_TeachersTab> {
                         runSpacing: 8,
                         children: [
                           ElevatedButton.icon(
+                            icon: const Icon(Icons.file_download_outlined, size: 16),
+                            label: const Text('Export Teachers CSV'),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.indigo.shade600,
+                              foregroundColor: Colors.white,
+                            ),
+                            onPressed: _exportTeachers,
+                          ),
+                          ElevatedButton.icon(
                             icon: const Icon(Icons.download, size: 16),
-                            label: const Text('Download Teacher Template CSV'),
+                            label: const Text('Download Template CSV'),
                             onPressed: () async {
                               try {
                                 final file = await widget.api
@@ -2084,6 +3153,77 @@ class _StudentsTabState extends State<_StudentsTab> {
     );
   }
 
+  bool _isExporting = false;
+
+  Future<void> _exportStudents() async {
+    if (_isExporting) return;
+    setState(() => _isExporting = true);
+    try {
+      final allStudents = <Student>[];
+      int page = 1;
+      int totalPages = 1;
+
+      while (page <= totalPages) {
+        final res = await widget.api.listStudents(
+          classId: _filterClass?.id,
+          academicYearId: widget.selectedYear?.id,
+          page: page,
+          pageSize: 100,
+        );
+        final fetched = res.data.map((x) => Student.fromJson(x)).toList();
+        allStudents.addAll(fetched);
+        totalPages = res.totalPages;
+        page++;
+        if (page > 100) break;
+      }
+
+      if (allStudents.isEmpty) {
+        widget.snack('No students to export');
+        return;
+      }
+
+      final buffer = StringBuffer();
+      buffer.writeln(
+        'class_id,admission_number,roll_number,full_name,gender,dob,guardian_name,guardian_phone',
+      );
+      for (final s in allStudents) {
+        final dobStr = s.dob != null && s.dob!.isNotEmpty
+            ? (s.dob!.contains('T') ? s.dob!.split('T')[0] : s.dob!)
+            : '';
+        final row = [
+          _csvEscape(s.classId),
+          _csvEscape(s.admissionNumber),
+          _csvEscape(s.rollNumber),
+          _csvEscape(s.fullName),
+          _csvEscape(s.gender ?? ''),
+          _csvEscape(dobStr),
+          _csvEscape(s.guardianName ?? ''),
+          _csvEscape(s.guardianPhone ?? ''),
+        ].join(',');
+        buffer.writeln(row);
+      }
+
+      final bytes = Uint8List.fromList(utf8.encode(buffer.toString()));
+      final dateStr = DateTime.now().toIso8601String().split('T')[0];
+      final classSuffix = _filterClass != null
+          ? '_${_filterClass!.displayName.replaceAll(' ', '_')}'
+          : '';
+      triggerDownload(
+        bytes,
+        'students_export${classSuffix}_$dateStr.csv',
+        'text/csv',
+      );
+      widget.snack(
+        'Students exported successfully (${allStudents.length} students)',
+        error: false,
+      );
+    } catch (e) {
+      widget.snack('Failed to export students: $e');
+    } finally {
+      if (mounted) setState(() => _isExporting = false);
+    }
+  }
+
   Future<void> _bulkImport() async {
     try {
       final result = await FilePicker.platform.pickFiles(
@@ -2131,7 +3271,7 @@ class _StudentsTabState extends State<_StudentsTab> {
               ),
               const SizedBox(height: 8),
               const Text(
-                'Please create or select an Academic Session in the "Sessions" tab to view and manage students.',
+                'Please create or select an Academic Session in the "Academic Session" tab to view and manage students.',
                 style: TextStyle(color: Colors.grey),
               ),
             ],
@@ -2260,11 +3400,28 @@ class _StudentsTabState extends State<_StudentsTab> {
                                     'Failed to download template: $e',
                                   );
                                 }
+                              } else if (val == 'export') {
+                                _exportStudents();
                               } else if (val == 'import' && !isArchived) {
                                 _bulkImport();
                               }
                             },
                             itemBuilder: (ctx) => [
+                              PopupMenuItem(
+                                value: 'export',
+                                enabled: !_isExporting,
+                                child: Row(
+                                  children: const [
+                                    Icon(
+                                      Icons.file_download_outlined,
+                                      size: 18,
+                                      color: Colors.indigo,
+                                    ),
+                                    SizedBox(width: 8),
+                                    Text('Export Students CSV'),
+                                  ],
+                                ),
+                              ),
                               const PopupMenuItem(
                                 value: 'download',
                                 child: Row(
@@ -2368,7 +3525,25 @@ class _StudentsTabState extends State<_StudentsTab> {
                         ),
                       ),
                       ElevatedButton.icon(
-                        icon: const Icon(Icons.download, size: 18),
+                        icon: _isExporting
+                            ? const SizedBox(
+                                width: 14,
+                                height: 14,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Colors.white,
+                                ),
+                              )
+                            : const Icon(Icons.file_download_outlined, size: 16),
+                        label: const Text('Export Students CSV'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.indigo.shade600,
+                          foregroundColor: Colors.white,
+                        ),
+                        onPressed: _isExporting ? null : _exportStudents,
+                      ),
+                      ElevatedButton.icon(
+                        icon: const Icon(Icons.download, size: 16),
                         label: const Text('Download Template CSV'),
                         onPressed: () async {
                           try {
@@ -2386,7 +3561,7 @@ class _StudentsTabState extends State<_StudentsTab> {
                         },
                       ),
                       ElevatedButton.icon(
-                        icon: const Icon(Icons.upload_file, size: 18),
+                        icon: const Icon(Icons.upload_file, size: 16),
                         label: const Text('CSV Import'),
                         onPressed: isArchived ? null : _bulkImport,
                       ),
@@ -2522,8 +3697,6 @@ class _ReportsTabState extends State<_ReportsTab> {
   bool _loading = false;
   bool _exporting = false;
   dynamic _previewData;
-
-  final _sessionIdCtrl = TextEditingController();
 
   DateTime? _parseDate(String? d) {
     if (d == null || d.isEmpty) return null;
@@ -2688,20 +3861,6 @@ class _ReportsTabState extends State<_ReportsTab> {
       widget.snack('Export failed: $e');
     } finally {
       if (mounted) setState(() => _exporting = false);
-    }
-  }
-
-  Future<void> _reopenSession() async {
-    final sid = _sessionIdCtrl.text.trim();
-    if (sid.isEmpty) {
-      widget.snack('Enter a session ID');
-      return;
-    }
-    try {
-      await widget.api.reopenAttendanceSession(sid);
-      widget.snack('Session reopened successfully', error: false);
-    } catch (e) {
-      widget.snack('Failed to reopen session: $e');
     }
   }
 
@@ -3042,40 +4201,6 @@ class _ReportsTabState extends State<_ReportsTab> {
               _buildDefaultersPreview(_previewData),
             if (_reportType == 'audit_log') _buildAuditLogPreview(_previewData),
           ],
-
-          const Divider(height: 40),
-
-          // Admin Utility: Reopen Session
-          Text(
-            'Reopen Closed Attendance Session (Admin Only)',
-            style: Theme.of(
-              context,
-            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 8),
-          Wrap(
-            spacing: 12,
-            runSpacing: 12,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            children: [
-              SizedBox(
-                width: 320,
-                child: TextField(
-                  controller: _sessionIdCtrl,
-                  decoration: const InputDecoration(
-                    labelText: 'Session ID (UUID)',
-                    border: OutlineInputBorder(),
-                    isDense: true,
-                  ),
-                ),
-              ),
-              ElevatedButton.icon(
-                icon: const Icon(Icons.lock_open, size: 16),
-                label: const Text('Reopen Session'),
-                onPressed: _reopenSession,
-              ),
-            ],
-          ),
         ],
       ),
     );
@@ -4288,6 +5413,7 @@ class _AcademicSessionsTabState extends State<_AcademicSessionsTab> {
   @override
   Widget build(BuildContext context) {
     final isMobile = context.isMobile;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final active = _activeYear;
     final archived = _archivedYears;
 
@@ -4299,11 +5425,15 @@ class _AcademicSessionsTabState extends State<_AcademicSessionsTab> {
           // Header Card
           Card(
             elevation: 0,
-            color: Theme.of(context).primaryColor.withValues(alpha: 0.05),
+            color: isDark
+                ? Theme.of(context).cardColor
+                : Theme.of(context).primaryColor.withValues(alpha: 0.05),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(12),
               side: BorderSide(
-                color: Theme.of(context).primaryColor.withValues(alpha: 0.2),
+                color: isDark
+                    ? Colors.white12
+                    : Theme.of(context).primaryColor.withValues(alpha: 0.2),
               ),
             ),
             child: Padding(
@@ -4333,7 +5463,7 @@ class _AcademicSessionsTabState extends State<_AcademicSessionsTab> {
                         Text(
                           'Manage active academic session, isolated archived records, and student progressions.',
                           style: TextStyle(
-                            color: Colors.grey.shade700,
+                            color: isDark ? const Color(0xFF94A3B8) : Colors.grey.shade700,
                             fontSize: 12,
                           ),
                         ),
@@ -4369,7 +5499,7 @@ class _AcademicSessionsTabState extends State<_AcademicSessionsTab> {
                               Text(
                                 'Maintain immutable historical session records, manage the active session, and handle copy/progression workflows.',
                                 style: TextStyle(
-                                  color: Colors.grey.shade700,
+                                  color: isDark ? const Color(0xFF94A3B8) : Colors.grey.shade700,
                                   fontSize: 13,
                                 ),
                               ),
@@ -4435,7 +5565,7 @@ class _AcademicSessionsTabState extends State<_AcademicSessionsTab> {
                         const SizedBox(height: 8),
                         Text(
                           'Please create your school\'s academic session to begin taking attendance and managing classes.',
-                          style: TextStyle(color: Colors.grey.shade600),
+                          style: TextStyle(color: isDark ? const Color(0xFF94A3B8) : Colors.grey.shade600),
                           textAlign: TextAlign.center,
                         ),
                         const SizedBox(height: 16),
@@ -4469,7 +5599,7 @@ class _AcademicSessionsTabState extends State<_AcademicSessionsTab> {
                               Container(
                                 padding: const EdgeInsets.all(8),
                                 decoration: BoxDecoration(
-                                  color: Colors.green.shade50,
+                                  color: Colors.green.withValues(alpha: 0.15),
                                   borderRadius: BorderRadius.circular(8),
                                 ),
                                 child: const Icon(Icons.check_circle, color: Colors.green),
@@ -4488,7 +5618,7 @@ class _AcademicSessionsTabState extends State<_AcademicSessionsTab> {
                                   const SizedBox(height: 2),
                                   Text(
                                     'Period: ${active.startDate.split('T')[0]} to ${active.endDate.split('T')[0]}',
-                                    style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                                    style: TextStyle(fontSize: 12, color: isDark ? const Color(0xFF94A3B8) : Colors.grey.shade600),
                                   ),
                                 ],
                               ),
@@ -4512,7 +5642,7 @@ class _AcademicSessionsTabState extends State<_AcademicSessionsTab> {
                                 icon: const Icon(Icons.archive, size: 16, color: Colors.orange),
                                 label: const Text('Archive Active Session'),
                                 style: OutlinedButton.styleFrom(
-                                  foregroundColor: Colors.orange.shade900,
+                                  foregroundColor: Colors.orange.shade800,
                                   side: BorderSide(color: Colors.orange.shade400),
                                   padding: const EdgeInsets.symmetric(
                                     horizontal: 12,
@@ -4540,30 +5670,51 @@ class _AcademicSessionsTabState extends State<_AcademicSessionsTab> {
 
               // Annual Progression Option
               Card(
-                color: Colors.blue.shade50.withValues(alpha: 0.5),
+                color: isDark
+                    ? const Color(0xFF1E293B)
+                    : Colors.blue.shade50.withValues(alpha: 0.5),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(10),
-                  side: BorderSide(color: Colors.blue.shade200),
+                  side: BorderSide(
+                    color: isDark
+                        ? const Color(0xFF334155)
+                        : Colors.blue.shade200,
+                  ),
                 ),
                 child: Padding(
                   padding: const EdgeInsets.all(16),
                   child: Row(
                     children: [
-                      Icon(Icons.trending_up, color: Colors.blue.shade800, size: 32),
+                      Icon(
+                        Icons.trending_up,
+                        color: isDark ? Colors.blue.shade300 : Colors.blue.shade800,
+                        size: 32,
+                      ),
                       const SizedBox(width: 14),
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Text(
+                            Text(
                               'Annual Progression: Move All Students to Higher Grade',
-                              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 14,
+                                color: isDark
+                                    ? Colors.white
+                                    : Theme.of(context).colorScheme.onSurface,
+                              ),
                             ),
                             const SizedBox(height: 4),
                             Text(
                               'Promotes all students to the next grade level (1st -> 2nd, 2nd -> 3rd, ..., 9th -> 10th). '
                               'Top-grade graduating students will be cleared from this active session while their historical data stays recorded in past sessions.',
-                              style: TextStyle(fontSize: 12, color: Colors.grey.shade700),
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: isDark
+                                    ? const Color(0xFF94A3B8)
+                                    : Colors.grey.shade700,
+                              ),
                             ),
                           ],
                         ),
@@ -4574,15 +5725,22 @@ class _AcademicSessionsTabState extends State<_AcademicSessionsTab> {
                             ? const SizedBox(
                                 width: 14,
                                 height: 14,
-                                child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Colors.white,
+                                ),
                               )
                             : const Icon(Icons.arrow_upward, size: 16),
                         label: const Text('Move All to Higher Grade'),
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.blue.shade700,
+                          backgroundColor: isDark
+                              ? Colors.blue.shade600
+                              : Colors.blue.shade700,
                           foregroundColor: Colors.white,
                         ),
-                        onPressed: _movingAllHigher ? null : _showMoveAllHigherConfirmationDialog,
+                        onPressed: _movingAllHigher
+                            ? null
+                            : _showMoveAllHigherConfirmationDialog,
                       ),
                     ],
                   ),
@@ -4598,10 +5756,13 @@ class _AcademicSessionsTabState extends State<_AcademicSessionsTab> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Row(
-                        children: const [
-                          Icon(Icons.swap_horiz, color: Colors.indigo),
-                          SizedBox(width: 8),
-                          Text(
+                        children: [
+                          Icon(
+                            Icons.swap_horiz,
+                            color: isDark ? Colors.indigo.shade300 : Colors.indigo,
+                          ),
+                          const SizedBox(width: 8),
+                          const Text(
                             'Move Student(s) Between Classes',
                             style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
                           ),
@@ -4610,7 +5771,10 @@ class _AcademicSessionsTabState extends State<_AcademicSessionsTab> {
                       const SizedBox(height: 6),
                       Text(
                         'Transfer one or multiple students from one class/section to another in this active session.',
-                        style: TextStyle(fontSize: 12, color: Colors.grey.shade700),
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: isDark ? const Color(0xFF94A3B8) : Colors.grey.shade700,
+                        ),
                       ),
                       const SizedBox(height: 16),
                       Wrap(
@@ -5030,14 +6194,41 @@ class _SchoolDaysTabState extends State<_SchoolDaysTab> {
     }
   }
 
+  (bool, String) _getTodayStatus() {
+    final now = DateTime.now();
+    final todayStr = "${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}";
+
+    // 1. Check specific date holiday overrides
+    final match = _holidays.where((h) => h.holidayDate == todayStr).firstOrNull;
+    if (match != null) {
+      if (match.isHoliday) {
+        return (true, match.title);
+      } else {
+        return (false, 'Special Working Day (${match.title})');
+      }
+    }
+
+    // 2. Check weekly schedule
+    final dayOfWeek = now.weekday % 7; // 0=Sun, 1=Mon, ..., 6=Sat
+    final wDay = _weeklySchedules.where((w) => w.dayOfWeek == dayOfWeek).firstOrNull;
+    if (wDay != null && !wDay.isWorkingDay) {
+      return (true, '${wDay.dayName} is regular weekly off');
+    } else if (wDay == null && dayOfWeek == 0) {
+      return (true, 'Sunday is regular weekly off');
+    }
+
+    return (false, 'Regular Scheduled Working Day');
+  }
+
   Future<void> _showAddHolidayDialog({
     DateTime? initialDate,
     String? initialTitle,
+    bool initialIsHoliday = true,
   }) async {
     final titleCtrl = TextEditingController(text: initialTitle ?? '');
     final descCtrl = TextEditingController();
     DateTime selectedDate = initialDate ?? DateTime.now();
-    bool isHoliday = true;
+    bool isHoliday = initialIsHoliday;
 
     await showDialog(
       context: context,
@@ -5237,6 +6428,9 @@ class _SchoolDaysTabState extends State<_SchoolDaysTab> {
 
   @override
   Widget build(BuildContext context) {
+    final (todayIsHoliday, todayReason) = _getTodayStatus();
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
       child: Column(
@@ -5285,6 +6479,108 @@ class _SchoolDaysTabState extends State<_SchoolDaysTab> {
                         ),
                       ],
                     ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 20),
+
+          // ─── Today's Live Status Banner ──────────────────────────────────
+          Card(
+            elevation: 3,
+            color: todayIsHoliday
+                ? (isDark ? const Color(0xFF451A03) : Colors.orange.shade50)
+                : (isDark ? const Color(0xFF064E3B) : Colors.green.shade50),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+              side: BorderSide(
+                color: todayIsHoliday
+                    ? (isDark ? Colors.orange.shade800 : Colors.orange.shade300)
+                    : (isDark ? Colors.green.shade800 : Colors.green.shade300),
+                width: 1.5,
+              ),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: todayIsHoliday
+                          ? (isDark ? Colors.orange.shade900.withValues(alpha: 0.5) : Colors.orange.shade100)
+                          : (isDark ? Colors.green.shade900.withValues(alpha: 0.5) : Colors.green.shade100),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(
+                      todayIsHoliday ? Icons.beach_access : Icons.school,
+                      size: 32,
+                      color: todayIsHoliday ? Colors.orange.shade600 : Colors.green.shade600,
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                              decoration: BoxDecoration(
+                                color: todayIsHoliday ? Colors.orange.shade700 : Colors.green.shade700,
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: Text(
+                                todayIsHoliday ? 'TODAY: SCHOOL HOLIDAY (OFF)' : 'TODAY: WORKING SCHOOL DAY',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.bold,
+                                  letterSpacing: 0.5,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          todayIsHoliday ? 'Reason: $todayReason' : todayReason,
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            color: isDark ? Colors.white : Colors.black87,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          todayIsHoliday
+                              ? 'Attendance marking is not scheduled today for teachers and students.'
+                              : 'Teachers are scheduled to mark daily session attendance.',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: isDark ? const Color(0xFF94A3B8) : Colors.grey.shade700,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  ElevatedButton.icon(
+                    icon: Icon(todayIsHoliday ? Icons.work_outline : Icons.beach_access, size: 16),
+                    label: Text(todayIsHoliday ? 'Declare Working Day' : 'Declare Holiday'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: todayIsHoliday ? Colors.blue.shade700 : Colors.orange.shade700,
+                      foregroundColor: Colors.white,
+                    ),
+                    onPressed: () {
+                      _showAddHolidayDialog(
+                        initialDate: DateTime.now(),
+                        initialTitle: todayIsHoliday ? 'Special Working Day Override' : 'School Holiday',
+                        initialIsHoliday: !todayIsHoliday,
+                      );
+                    },
                   ),
                 ],
               ),

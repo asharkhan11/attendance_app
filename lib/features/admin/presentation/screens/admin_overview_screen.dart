@@ -29,6 +29,8 @@ class _AdminOverviewScreenState extends State<AdminOverviewScreen> {
   bool _loading = false;
   Map<String, dynamic>? _overview;
   List<dynamic> _sessionStatuses = [];
+  List<WeeklyDaySchedule> _weeklySchedules = [];
+  List<SchoolHoliday> _holidays = [];
 
   @override
   void initState() {
@@ -54,29 +56,79 @@ class _AdminOverviewScreenState extends State<AdminOverviewScreen> {
       ).toIso8601String().split('T')[0];
       final to = now.toIso8601String().split('T')[0];
 
-      final ov = await widget.api.getSchoolOverview(
-        academicYearId: widget.selectedYear!.id,
-        from: from,
-        to: to,
-        threshold: 75,
-      );
-      final sessionsRes = await widget.api.listSessions(
-        from: to,
-        to: to,
-        pageSize: 50,
-      );
+      final results = await Future.wait([
+        widget.api.getSchoolOverview(
+          academicYearId: widget.selectedYear!.id,
+          from: from,
+          to: to,
+          threshold: 75,
+        ),
+        widget.api.listSessions(
+          from: to,
+          to: to,
+          pageSize: 50,
+        ),
+        widget.api.getWeeklySchedule().catchError((_) => []),
+        widget.api.getSchoolHolidays().catchError((_) => []),
+      ]);
+
+      final ov = results[0];
+      final sessionsRes = results[1] as ApiPage<dynamic>;
+      final wRes = results[2];
+      final hRes = results[3];
+
+      List<WeeklyDaySchedule> weekly = [];
+      if (wRes is List) {
+        weekly = wRes
+            .map((x) => WeeklyDaySchedule.fromJson(x as Map<String, dynamic>))
+            .toList();
+      }
+
+      List<SchoolHoliday> holidays = [];
+      if (hRes is List) {
+        holidays = hRes
+            .map((x) => SchoolHoliday.fromJson(x as Map<String, dynamic>))
+            .toList();
+      }
 
       setState(() {
         _overview = ov is Map
             ? Map<String, dynamic>.from(ov['data'] ?? ov)
             : <String, dynamic>{};
         _sessionStatuses = sessionsRes.data;
+        _weeklySchedules = weekly;
+        _holidays = holidays;
       });
     } catch (e) {
       widget.snack('Failed to load overview: $e');
     } finally {
       if (mounted) setState(() => _loading = false);
     }
+  }
+
+  (bool, String) _getTodayStatus() {
+    final now = DateTime.now();
+    final todayStr =
+        "${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}";
+
+    final match = _holidays.where((h) => h.holidayDate == todayStr).firstOrNull;
+    if (match != null) {
+      if (match.isHoliday) {
+        return (true, match.title);
+      } else {
+        return (false, 'Special Working Day (${match.title})');
+      }
+    }
+
+    final dayOfWeek = now.weekday % 7;
+    final wDay = _weeklySchedules.where((w) => w.dayOfWeek == dayOfWeek).firstOrNull;
+    if (wDay != null && !wDay.isWorkingDay) {
+      return (true, '${wDay.dayName} is regular weekly off');
+    } else if (wDay == null && dayOfWeek == 0) {
+      return (true, 'Sunday is regular weekly off');
+    }
+
+    return (false, 'Working School Day');
   }
 
   num _findNum(List<String> keys) {
@@ -172,6 +224,8 @@ class _AdminOverviewScreenState extends State<AdminOverviewScreen> {
   }
 
   Widget _buildGreetingHeader(ThemeData theme, String greeting) {
+    final (isHoliday, holidayReason) = _getTodayStatus();
+
     return Card(
       child: Container(
         width: double.infinity,
@@ -193,13 +247,51 @@ class _AdminOverviewScreenState extends State<AdminOverviewScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    '$greeting 👋',
-                    style: const TextStyle(
-                      color: Colors.white70,
-                      fontSize: 14,
-                      fontWeight: FontWeight.w500,
-                    ),
+                  Row(
+                    children: [
+                      Text(
+                        '$greeting 👋',
+                        style: const TextStyle(
+                          color: Colors.white70,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      InkWell(
+                        onTap: () => widget.navigateTo(8), // Navigate to School Days tab
+                        borderRadius: BorderRadius.circular(12),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: isHoliday
+                                ? Colors.orange.shade800.withValues(alpha: 0.85)
+                                : Colors.green.shade800.withValues(alpha: 0.85),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: Colors.white24),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                isHoliday ? Icons.beach_access : Icons.school,
+                                color: Colors.white,
+                                size: 12,
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                isHoliday ? 'Today: $holidayReason' : 'Today: Working Day',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 4),
                   Text(
@@ -459,25 +551,25 @@ class _AdminOverviewScreenState extends State<AdminOverviewScreen> {
         icon: Icons.analytics_rounded,
         label: 'View Analytics',
         color: const Color(0xFF4F46E5),
-        onTap: () => widget.navigateTo(2), // Analytics = index 2
+        onTap: () => widget.navigateTo(3), // Analytics = index 3
       ),
       _QuickAction(
         icon: Icons.people_rounded,
         label: 'Manage Students',
         color: const Color(0xFF059669),
-        onTap: () => widget.navigateTo(4), // Students = index 4
+        onTap: () => widget.navigateTo(5), // Students = index 5
       ),
       _QuickAction(
         icon: Icons.assessment_rounded,
         label: 'Export Reports',
         color: const Color(0xFF0EA5E9),
-        onTap: () => widget.navigateTo(6), // Reports = index 6
+        onTap: () => widget.navigateTo(7), // Reports = index 7
       ),
       _QuickAction(
         icon: Icons.class_rounded,
         label: 'Manage Classes',
         color: const Color(0xFF8B5CF6),
-        onTap: () => widget.navigateTo(3), // Classes = index 3
+        onTap: () => widget.navigateTo(4), // Classes = index 4
       ),
     ];
 

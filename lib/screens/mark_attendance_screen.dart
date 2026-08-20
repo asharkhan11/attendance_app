@@ -1,6 +1,10 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import '../models/app_models.dart';
 import '../services/api_service.dart';
+import '../services/offline_storage_service.dart';
+import '../services/attendance_sync_service.dart';
+import '../services/connectivity_service.dart';
 import '../widgets/searchable_dropdown.dart';
 
 import '../design_system/app_breakpoints.dart';
@@ -28,12 +32,16 @@ class MarkAttendanceScreen extends StatefulWidget {
 
 class _MarkAttendanceScreenState extends State<MarkAttendanceScreen> {
   final ApiService _apiService = ApiService();
+  final OfflineStorageService _storage = OfflineStorageService();
+  final AttendanceSyncService _syncService = AttendanceSyncService();
+  final ConnectivityService _connectivity = ConnectivityService();
   final TextEditingController _searchCtrl = TextEditingController();
 
   bool _isLoading = true;
   bool _isSaving = false;
   List<RosterEntry> _roster = [];
   bool _isClosed = false;
+  bool _isOfflineRoster = false;
   String _filterStatus =
       'all'; // 'all', 'present', 'absent', 'late', 'excused'
 
@@ -62,9 +70,62 @@ class _MarkAttendanceScreenState extends State<MarkAttendanceScreen> {
 
   Future<void> _loadSessionRoster() async {
     setState(() => _isLoading = true);
+
+    // Purely online mode for Web
+    if (kIsWeb) {
+      try {
+        final data = await _apiService.getAttendanceSession(widget.session.id);
+        if (data != null && mounted) {
+          final sessionData = data['session'];
+          if (sessionData != null) {
+            _isClosed = sessionData['status'] == 'closed';
+          }
+          final rosterList = data['roster'] as List?;
+          if (rosterList != null) {
+            _roster = rosterList.map((x) => RosterEntry.fromJson(x)).toList();
+          }
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Error loading session roster: $e'),
+              backgroundColor: Colors.redAccent,
+            ),
+          );
+        }
+      } finally {
+        if (mounted) setState(() => _isLoading = false);
+      }
+      return;
+    }
+
+    // ─── Mobile Platform: Offline-First Caching ──────────────────────────────
+    // 1. Check local session cache first for instant UI response
+    final cachedSession = await _storage.getCachedSessionRoster(widget.session.id);
+    if (cachedSession != null && mounted) {
+      final sessionData = cachedSession['session'];
+      if (sessionData != null) {
+        _isClosed = sessionData['status'] == 'closed';
+      }
+      final rosterList = cachedSession['roster'] as List?;
+      if (rosterList != null) {
+        _roster = rosterList.map((x) => RosterEntry.fromJson(x)).toList();
+        setState(() => _isLoading = false);
+      }
+    }
+
+    // 2. If it's a synthetic offline session or device is offline, try offline class roster cache
+    final isOfflineSession = widget.session.id.startsWith('offline_');
+    if (isOfflineSession || !_connectivity.isOnline) {
+      await _loadFromLocalRosterCache();
+      return;
+    }
+
+    // 3. Try online fetch
     try {
       final data = await _apiService.getAttendanceSession(widget.session.id);
-      if (data != null) {
+      if (data != null && mounted) {
         final sessionData = data['session'];
         if (sessionData != null) {
           _isClosed = sessionData['status'] == 'closed';
@@ -73,54 +134,206 @@ class _MarkAttendanceScreenState extends State<MarkAttendanceScreen> {
         final rosterList = data['roster'] as List?;
         if (rosterList != null) {
           _roster = rosterList.map((x) => RosterEntry.fromJson(x)).toList();
+          _isOfflineRoster = false;
         }
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error loading session roster: $e'),
-            backgroundColor: Colors.redAccent,
-          ),
+
+        // Cache session roster locally for future offline usage
+        await _storage.cacheSessionRoster(
+          widget.session.id,
+          Map<String, dynamic>.from(data),
         );
       }
+    } catch (e) {
+      // Fallback to local roster cache if online call failed
+      await _loadFromLocalRosterCache();
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
+  }
+
+  Future<void> _loadFromLocalRosterCache() async {
+    final cachedStudents = await _storage.getCachedClassRoster(widget.schoolClass.id);
+    if (cachedStudents.isNotEmpty && mounted) {
+      // Check if there are existing pending marks in queue for this class/session
+      final queue = await _storage.getPendingSyncQueue();
+      final pendingItem = queue.where((q) =>
+          q.classId == widget.schoolClass.id &&
+          q.sessionDate == widget.session.sessionDate &&
+          q.periodNumber == widget.session.periodNumber).firstOrNull;
+
+      final marksMap = <String, String>{};
+      final remarksMap = <String, String?>{};
+      if (pendingItem != null) {
+        for (final m in pendingItem.marks) {
+          final sId = m['student_id']?.toString() ?? '';
+          marksMap[sId] = m['status']?.toString() ?? 'present';
+          remarksMap[sId] = m['remarks']?.toString();
+        }
+        if (pendingItem.shouldClose) {
+          _isClosed = true;
+        }
+      }
+
+      setState(() {
+        _isOfflineRoster = true;
+        _roster = cachedStudents.map((s) {
+          return RosterEntry(
+            studentId: s.id,
+            fullName: s.fullName,
+            rollNumber: s.rollNumber,
+            status: marksMap[s.id] ?? 'present',
+            remarks: remarksMap[s.id],
+          );
+        }).toList();
+      });
+    } else {
+      if (mounted && _roster.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('No cached roster available for this class. Please connect to internet to fetch roster once.'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      }
+    }
+    if (mounted) setState(() => _isLoading = false);
   }
 
   Future<void> _submitBulkMark() async {
     if (_roster.isEmpty) return;
 
     setState(() => _isSaving = true);
-    try {
-      final marks = _roster
-          .map(
-            (r) => {
-              'student_id': r.studentId,
-              'status': r.status,
-              if (r.remarks != null && r.remarks!.isNotEmpty)
-                'remarks': r.remarks,
-            },
-          )
-          .toList();
+    final attTheme = Theme.of(context).extension<AttendanceTheme>() ?? AttendanceTheme.light;
 
-      await _apiService.markAttendance(widget.session.id, marks);
+    final marks = _roster
+        .map(
+          (r) => {
+            'student_id': r.studentId,
+            'status': r.status,
+            if (r.remarks != null && r.remarks!.isNotEmpty)
+              'remarks': r.remarks,
+          },
+        )
+        .toList();
+
+    // Purely online mode for Web
+    if (kIsWeb) {
+      try {
+        await _apiService.markAttendance(widget.session.id, marks);
+        widget.onSessionUpdated?.call();
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: const Row(
+                children: [
+                  Icon(Icons.check_circle_rounded, color: Colors.white),
+                  SizedBox(width: 10),
+                  Text('Attendance records saved successfully!'),
+                ],
+              ),
+              backgroundColor: attTheme.present,
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Failed to save attendance: $e'),
+              backgroundColor: Colors.redAccent,
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+      } finally {
+        if (mounted) setState(() => _isSaving = false);
+      }
+      return;
+    }
+
+    // ─── Mobile Platform: Online with Offline Queue Fallback ──────────────────
+    final isOfflineSession = widget.session.id.startsWith('offline_');
+    final isOnline = _connectivity.isOnline && !isOfflineSession;
+
+    if (isOnline) {
+      try {
+        await _apiService.markAttendance(widget.session.id, marks);
+        
+        // Cache locally as well
+        await _storage.cacheSessionRoster(widget.session.id, {
+          'session': widget.session.toJson(),
+          'roster': _roster.map((r) => r.toJson()).toList(),
+        });
+
+        widget.onSessionUpdated?.call();
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: const Row(
+                children: [
+                  Icon(Icons.check_circle_rounded, color: Colors.white),
+                  SizedBox(width: 10),
+                  Text('Attendance records saved successfully to server!'),
+                ],
+              ),
+              backgroundColor: attTheme.present,
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+        if (mounted) setState(() => _isSaving = false);
+        return;
+      } catch (e) {
+        // Fallback to offline queue below on mobile
+      }
+    }
+
+    // Save to Offline Persistent Queue (Mobile)
+    try {
+      final queueId = isOfflineSession
+          ? widget.session.id
+          : '${widget.schoolClass.id}_${widget.session.sessionDate}_${widget.session.periodNumber}';
+
+      final item = AttendanceSyncQueueItem(
+        id: queueId,
+        classId: widget.schoolClass.id,
+        className: widget.schoolClass.displayName,
+        sessionDate: widget.session.sessionDate,
+        periodNumber: widget.session.periodNumber,
+        marks: marks,
+        shouldClose: _isClosed,
+        createdAt: DateTime.now().toIso8601String(),
+      );
+
+      await _storage.enqueueSyncItem(item);
+      await _storage.cacheSessionRoster(widget.session.id, {
+        'session': widget.session.toJson(),
+        'roster': _roster.map((r) => r.toJson()).toList(),
+      });
+      await _syncService.refreshPendingCount();
+
       widget.onSessionUpdated?.call();
 
       if (mounted) {
-        final attTheme = Theme.of(context).extension<AttendanceTheme>() ?? AttendanceTheme.light;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: const Row(
               children: [
-                Icon(Icons.check_circle_rounded, color: Colors.white),
+                Icon(Icons.cloud_queue_rounded, color: Colors.white),
                 SizedBox(width: 10),
-                Text('Attendance records saved successfully!'),
+                Expanded(
+                  child: Text(
+                    'Saved locally (Offline). Attendance will automatically sync when connected.',
+                  ),
+                ),
               ],
             ),
-            backgroundColor: attTheme.present,
+            backgroundColor: Colors.amber.shade900,
             behavior: SnackBarBehavior.floating,
+            duration: const Duration(seconds: 4),
           ),
         );
       }
@@ -128,7 +341,7 @@ class _MarkAttendanceScreenState extends State<MarkAttendanceScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Failed to save attendance: $e'),
+            content: Text('Failed to save offline attendance: $e'),
             backgroundColor: Colors.redAccent,
             behavior: SnackBarBehavior.floating,
           ),
@@ -193,19 +406,75 @@ class _MarkAttendanceScreenState extends State<MarkAttendanceScreen> {
   }
 
   Future<void> _closeSession() async {
+    if (kIsWeb) {
+      try {
+        await _submitBulkMark();
+        await _apiService.closeAttendanceSession(widget.session.id);
+        setState(() => _isClosed = true);
+        widget.onSessionUpdated?.call();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Session finalized and locked on server.'),
+              backgroundColor: Colors.amber,
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Error closing session: $e'),
+              backgroundColor: Colors.redAccent,
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+      }
+      return;
+    }
+
+    setState(() => _isClosed = true);
+    final isOfflineSession = widget.session.id.startsWith('offline_');
+    final isOnline = _connectivity.isOnline && !isOfflineSession;
+
     try {
-      await _submitBulkMark();
-      await _apiService.closeAttendanceSession(widget.session.id);
-      setState(() => _isClosed = true);
-      widget.onSessionUpdated?.call();
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Session finalized and locked.'),
-            backgroundColor: Colors.amber,
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
+      if (isOnline) {
+        await _submitBulkMark();
+        await _apiService.closeAttendanceSession(widget.session.id);
+        widget.onSessionUpdated?.call();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Session finalized and locked on server.'),
+              backgroundColor: Colors.amber,
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+      } else {
+        // Enqueue offline with shouldClose = true
+        await _submitBulkMark();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: const Row(
+                children: [
+                  Icon(Icons.lock_clock_rounded, color: Colors.white),
+                  SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      'Session marked and locked locally (Offline). It will be finalized on server when connected.',
+                    ),
+                  ),
+                ],
+              ),
+              backgroundColor: Colors.amber.shade900,
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
       }
     } catch (e) {
       if (mounted) {
@@ -412,6 +681,39 @@ class _MarkAttendanceScreenState extends State<MarkAttendanceScreen> {
             child: CustomScrollView(
               physics: const BouncingScrollPhysics(),
               slivers: [
+                // Offline Notice Banner if disconnected
+                if (!_connectivity.isOnline || _isOfflineRoster)
+                  SliverToBoxAdapter(
+                    child: Container(
+                      margin: const EdgeInsets.symmetric(
+                        horizontal: AppSpacing.sm,
+                        vertical: AppSpacing.xs,
+                      ),
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: Colors.amber.shade50,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: Colors.amber.shade300),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(Icons.cloud_off_rounded, color: Colors.amber.shade900, size: 20),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              'Offline Mode: You can mark attendance seamlessly. Records will automatically sync to the school database upon reconnecting.',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.amber.shade900,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+
                 // Summary Stat Header Banner
                 SliverToBoxAdapter(
                   child: Padding(

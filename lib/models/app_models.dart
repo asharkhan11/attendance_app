@@ -116,6 +116,17 @@ class SchoolClass {
       classTeacherEmail: json['class_teacher_email'],
     );
   }
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'school_id': schoolId,
+        'academic_year_id': academicYearId,
+        'grade_level': gradeLevel,
+        'section': section,
+        'class_teacher_id': classTeacherId,
+        'class_teacher_name': classTeacherName,
+        'class_teacher_email': classTeacherEmail,
+      };
 }
 
 class Student {
@@ -167,6 +178,21 @@ class Student {
       createdAt: json['created_at'],
     );
   }
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'school_id': schoolId,
+        'class_id': classId,
+        'admission_number': admissionNumber,
+        'roll_number': rollNumber,
+        'full_name': fullName,
+        'gender': gender,
+        'dob': dob,
+        'guardian_name': guardianName,
+        'guardian_phone': guardianPhone,
+        'is_active': isActive,
+        'created_at': createdAt,
+      };
 }
 
 class AttendanceSession {
@@ -176,6 +202,8 @@ class AttendanceSession {
   final String sessionDate;
   final int periodNumber;
   final String status;
+  final bool isFinalized;
+  final String? finalizedAt;
 
   AttendanceSession({
     required this.id,
@@ -184,6 +212,8 @@ class AttendanceSession {
     required this.sessionDate,
     required this.periodNumber,
     required this.status,
+    this.isFinalized = false,
+    this.finalizedAt,
   });
 
   factory AttendanceSession.fromJson(Map<String, dynamic> json) {
@@ -194,8 +224,21 @@ class AttendanceSession {
       sessionDate: json['session_date'] ?? '',
       periodNumber: (json['period_number'] as num?)?.toInt() ?? 1,
       status: json['status'] ?? 'open',
+      isFinalized: json['is_finalized'] == true,
+      finalizedAt: json['finalized_at']?.toString(),
     );
   }
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'class_id': classId,
+        'teacher_id': teacherId,
+        'session_date': sessionDate,
+        'period_number': periodNumber,
+        'status': status,
+        'is_finalized': isFinalized,
+        'finalized_at': finalizedAt,
+      };
 }
 
 class RosterEntry {
@@ -222,6 +265,14 @@ class RosterEntry {
       remarks: json['remarks'],
     );
   }
+
+  Map<String, dynamic> toJson() => {
+        'student_id': studentId,
+        'full_name': fullName,
+        'roll_number': rollNumber,
+        'status': status,
+        'remarks': remarks,
+      };
 }
 
 class ClassSummary {

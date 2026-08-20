@@ -11,10 +11,12 @@ import 'screens/teacher_dashboard.dart';
 import 'utils/app_logger.dart';
 import 'utils/app_theme.dart';
 
+import 'services/attendance_sync_service.dart';
+
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await EnvConfig.init();
-
+  AttendanceSyncService().initialize();
 
   FlutterError.onError = (FlutterErrorDetails details) {
     FlutterError.presentError(details);

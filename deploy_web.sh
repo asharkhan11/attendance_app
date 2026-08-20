@@ -15,6 +15,7 @@ SERVER_HOST="130.210.50.187"
 
 SSH_KEY="/c/Users/Ashar/Desktop/OCI/keys/ssh-key-2026-06-29.key"
 
+API_BASE_URL="https://api-attendance.mooble.win"
 REMOTE_WEB_DIR="/var/www/attendance"
 TEMP_REMOTE_TAR="/tmp/flutter_web_build.tar.gz"
 LOCAL_TAR="flutter_web_build.tar.gz"
@@ -62,6 +63,7 @@ command -v tar >/dev/null 2>&1 || \
 
 echo "Project directory : $(pwd)"
 echo "Production server : $SERVER_USER@$SERVER_HOST"
+echo "API Base URL      : $API_BASE_URL"
 echo "Remote Web Dir    : $REMOTE_WEB_DIR"
 echo "SSH key           : $SSH_KEY"
 
@@ -85,7 +87,9 @@ fi
 
 info "[1/7] Building Flutter Web release package"
 
-flutter build web --release
+flutter clean
+flutter pub get
+flutter build web --release --dart-define=API_BASE_URL="$API_BASE_URL"
 
 [ -d "$BUILD_DIR" ] || \
     error "Build directory not found: $BUILD_DIR"
@@ -157,6 +161,9 @@ ssh \
     -i "$SSH_KEY" \
     "$SERVER_USER@$SERVER_HOST" \
     "set -e
+
+    echo 'Clearing old build files in $REMOTE_WEB_DIR...'
+    sudo find '$REMOTE_WEB_DIR' -mindepth 1 -delete || sudo rm -rf '$REMOTE_WEB_DIR'/*
 
     echo 'Extracting build files to $REMOTE_WEB_DIR...'
     sudo tar -xzf '$TEMP_REMOTE_TAR' -C '$REMOTE_WEB_DIR'

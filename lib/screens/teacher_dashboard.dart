@@ -1,12 +1,16 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart' as rp;
 import '../providers/auth_provider.dart';
 import '../models/app_models.dart';
 import '../services/api_service.dart';
+import '../services/offline_storage_service.dart';
+import '../services/connectivity_service.dart';
 import '../utils/app_logger.dart';
 import '../services/download_helper.dart';
 import '../widgets/profile_modal.dart';
+import '../widgets/sync_status_badge.dart';
 import 'mark_attendance_screen.dart';
 
 import '../design_system/app_breakpoints.dart';
@@ -32,6 +36,8 @@ class TeacherDashboard extends StatefulWidget {
 
 class _TeacherDashboardState extends State<TeacherDashboard> {
   final ApiService _apiService = ApiService();
+  final OfflineStorageService _storage = OfflineStorageService();
+  final ConnectivityService _connectivity = ConnectivityService();
   final ScrollController _scrollCtrl = ScrollController();
   final TextEditingController _searchCtrl = TextEditingController();
   int _navIndex = 0;
@@ -149,6 +155,15 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
       _sessionDiagnosticError = null;
     });
 
+    // 0. Load cached classes if available for fast offline startup
+    final cachedClasses = await _storage.getCachedAssignedClasses();
+    if (cachedClasses.isNotEmpty && mounted) {
+      setState(() {
+        _availableClasses = cachedClasses;
+        _selectedClass ??= _availableClasses.first;
+      });
+    }
+
     try {
       await _loadCalendarData();
 
@@ -182,6 +197,8 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
               _selectedClass = _availableClasses.first;
             }
           });
+          // Cache assigned classes locally
+          await _storage.cacheAssignedClasses(_availableClasses);
         }
       } on ApiException catch (e) {
         if (e.statusCode == 403) {
@@ -193,6 +210,7 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
             setState(() {
               _availableClasses = [_selectedClass!];
             });
+            await _storage.cacheAssignedClasses(_availableClasses);
           }
         } else {
           rethrow;
@@ -203,12 +221,13 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
           setState(() {
             _availableClasses = [_selectedClass!];
           });
+          await _storage.cacheAssignedClasses(_availableClasses);
         }
       }
 
       if (_selectedClass != null) {
         await _loadClassDataAndAnalytics();
-      } else {
+      } else if (_availableClasses.isEmpty) {
         setState(() {
           _errorMsg =
               'No class assigned to your teacher account. Please contact your administrator to assign a class.';
@@ -221,7 +240,7 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
         error: e,
         stackTrace: stack,
       );
-      if (mounted) {
+      if (mounted && _availableClasses.isEmpty) {
         setState(() {
           _errorMsg = 'Failed to load teacher dashboard: $e';
         });
@@ -247,6 +266,20 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
       _todayLateExcused = null;
     });
 
+    // 0. Pre-load cached roster & summary for immediate display
+    final cachedRoster = await _storage.getCachedClassRoster(requestClass.id);
+    if (cachedRoster.isNotEmpty && mounted && _selectedClass?.id == requestClass.id) {
+      setState(() {
+        _rosterStudents = cachedRoster;
+      });
+    }
+    final cachedSummary = await _storage.getCachedClassSummary(requestClass.id);
+    if (cachedSummary != null && mounted && _selectedClass?.id == requestClass.id) {
+      setState(() {
+        _summary = cachedSummary;
+      });
+    }
+
     final now = requestDate;
     final from = "${now.year}-${now.month.toString().padLeft(2, '0')}-01";
     final to =
@@ -271,6 +304,9 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
           setState(() {
             _summary = ClassSummary.fromJson(sMap);
           });
+          if (_summary != null) {
+            await _storage.cacheClassSummary(requestClass.id, _summary!);
+          }
         }
       } catch (e) {
         AppLogger.w('TeacherDashboard', 'Class summary load warning: $e');
@@ -315,6 +351,9 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
                 .map((x) => Student.fromJson(x))
                 .toList();
           });
+          if (_rosterStudents.isNotEmpty) {
+            await _storage.cacheClassRoster(requestClass.id, _rosterStudents);
+          }
         }
       } catch (e) {
         AppLogger.w('TeacherDashboard', 'Class roster load warning: $e');
@@ -409,16 +448,93 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
               );
             }
           } else {
-            setState(() {
-              _activeMarkingSession = null;
-              _todayPresent = null;
-              _todayAbsent = null;
-              _todayLateExcused = null;
-            });
+            // Check if there is an offline queued session for this slot
+            final selectedDateStr =
+                "${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}";
+            final queue = await _storage.getPendingSyncQueue();
+            final pendingItem = queue.where((q) =>
+                q.classId == requestClass.id &&
+                q.sessionDate == selectedDateStr &&
+                q.periodNumber == requestPeriod).firstOrNull;
+
+            if (pendingItem != null && mounted) {
+              final offlineSession = AttendanceSession(
+                id: pendingItem.id,
+                classId: pendingItem.classId,
+                teacherId: '',
+                sessionDate: pendingItem.sessionDate,
+                periodNumber: pendingItem.periodNumber,
+                status: pendingItem.shouldClose ? 'closed' : 'open',
+              );
+              int pCount = 0;
+              int aCount = 0;
+              int leCount = 0;
+              for (final m in pendingItem.marks) {
+                final st = m['status'];
+                if (st == 'present') {
+                  pCount++;
+                } else if (st == 'absent') {
+                  aCount++;
+                } else if (st == 'late' || st == 'excused') {
+                  leCount++;
+                }
+              }
+              setState(() {
+                _activeMarkingSession = offlineSession;
+                _todayPresent = pCount;
+                _todayAbsent = aCount;
+                _todayLateExcused = leCount;
+              });
+            } else {
+              setState(() {
+                _activeMarkingSession = null;
+                _todayPresent = null;
+                _todayAbsent = null;
+                _todayLateExcused = null;
+              });
+            }
           }
         }
       } catch (e) {
         AppLogger.w('TeacherDashboard', 'Daily sessions list load warning: $e');
+        // Offline check
+        final selectedDateStr =
+            "${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}";
+        final queue = await _storage.getPendingSyncQueue();
+        final pendingItem = queue.where((q) =>
+            q.classId == requestClass.id &&
+            q.sessionDate == selectedDateStr &&
+            q.periodNumber == requestPeriod).firstOrNull;
+
+        if (pendingItem != null && mounted) {
+          final offlineSession = AttendanceSession(
+            id: pendingItem.id,
+            classId: pendingItem.classId,
+            teacherId: '',
+            sessionDate: pendingItem.sessionDate,
+            periodNumber: pendingItem.periodNumber,
+            status: pendingItem.shouldClose ? 'closed' : 'open',
+          );
+          int pCount = 0;
+          int aCount = 0;
+          int leCount = 0;
+          for (final m in pendingItem.marks) {
+            final st = m['status'];
+            if (st == 'present') {
+              pCount++;
+            } else if (st == 'absent') {
+              aCount++;
+            } else if (st == 'late' || st == 'excused') {
+              leCount++;
+            }
+          }
+          setState(() {
+            _activeMarkingSession = offlineSession;
+            _todayPresent = pCount;
+            _todayAbsent = aCount;
+            _todayLateExcused = leCount;
+          });
+        }
       }
     } finally {
       if (mounted &&
@@ -500,6 +616,26 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
       'Starting daily attendance session for ${_selectedClass!.displayName}, Date: $formattedDate',
     );
 
+    // If on Mobile and offline, start offline session directly
+    if (!kIsWeb && !_connectivity.isOnline) {
+      final syntheticSession = AttendanceSession(
+        id: "offline_${_selectedClass!.id}_${formattedDate}_$_selectedPeriod",
+        classId: _selectedClass!.id,
+        teacherId: '',
+        sessionDate: formattedDate,
+        periodNumber: _selectedPeriod,
+        status: 'open',
+      );
+      AppLogger.i('TeacherDashboard', 'Created offline attendance session container: ${syntheticSession.id}');
+      setState(() {
+        _activeMarkingSession = syntheticSession;
+        _navIndex = 1;
+        _isStartingSession = false;
+      });
+      _loadClassDataAndAnalytics();
+      return;
+    }
+
     try {
       final res = await _apiService.createAttendanceSession({
         'class_id': _selectedClass!.id,
@@ -543,19 +679,38 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
           }
         });
       }
-    } catch (e, stack) {
-      AppLogger.e(
-        'TeacherDashboard',
-        'Unexpected exception on session creation',
-        error: e,
-        stackTrace: stack,
-      );
-      if (mounted) {
-        setState(() {
-          _sessionDiagnosticError =
-              'Server Connection Error (500 / Exception): ${e.toString().replaceAll('Exception: ', '')}\n\n'
-              'Check backend server status at ${ApiService.baseUrl} and ensure an Academic Session is active in Admin Dashboard.';
-        });
+    } catch (e) {
+      if (!kIsWeb) {
+        AppLogger.w(
+          'TeacherDashboard',
+          'Could not reach server to open session on mobile. Falling back to offline marking container.',
+          error: e,
+        );
+        // Fall back to offline session on network exception so teacher is never blocked on mobile
+        if (mounted) {
+          final syntheticSession = AttendanceSession(
+            id: "offline_${_selectedClass!.id}_${formattedDate}_$_selectedPeriod",
+            classId: _selectedClass!.id,
+            teacherId: '',
+            sessionDate: formattedDate,
+            periodNumber: _selectedPeriod,
+            status: 'open',
+          );
+          setState(() {
+            _activeMarkingSession = syntheticSession;
+            _navIndex = 1;
+          });
+          _loadClassDataAndAnalytics();
+        }
+      } else {
+        AppLogger.e('TeacherDashboard', 'Server connection error on web session creation', error: e);
+        if (mounted) {
+          setState(() {
+            _sessionDiagnosticError =
+                'Server Connection Error: ${e.toString().replaceAll('Exception: ', '')}\n\n'
+                'Check backend server status at ${ApiService.baseUrl} and ensure an Academic Session is active in Admin Dashboard.';
+          });
+        }
       }
     } finally {
       if (mounted) setState(() => _isStartingSession = false);
@@ -793,6 +948,13 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
                   ),
                   elevation: 1,
                   actions: [
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
+                      child: SyncStatusBadge(
+                        compact: !isWide,
+                        onSyncCompleted: _loadClassDataAndAnalytics,
+                      ),
+                    ),
                     if (_selectedClass != null)
                       IconButton(
                         icon: const Icon(Icons.download_rounded),
@@ -918,6 +1080,61 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
+                      // Live Holiday / School Day Notice Banner
+                      Builder(
+                        builder: (context) {
+                          final (isHoliday, holidayReason) = _getHolidayInfoForDate(_selectedDate);
+                          if (!isHoliday) return const SizedBox.shrink();
+                          final isDark = Theme.of(context).brightness == Brightness.dark;
+                          return Container(
+                            margin: const EdgeInsets.only(bottom: AppSpacing.xs),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: AppSpacing.md,
+                              vertical: AppSpacing.sm,
+                            ),
+                            decoration: BoxDecoration(
+                              color: isDark ? const Color(0xFF451A03) : Colors.orange.shade50,
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(
+                                color: isDark ? Colors.orange.shade800 : Colors.orange.shade300,
+                              ),
+                            ),
+                            child: Row(
+                              children: [
+                                Icon(
+                                  Icons.beach_access,
+                                  color: isDark ? Colors.orange.shade300 : Colors.orange.shade800,
+                                  size: 20,
+                                ),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        'HOLIDAY / OFF DAY: $holidayReason',
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 13,
+                                          color: isDark ? Colors.orange.shade200 : Colors.orange.shade900,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        'Today is designated as a school holiday. You may still conduct and mark attendance if a special session is held.',
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          color: isDark ? const Color(0xFFD1D5DB) : Colors.brown.shade700,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                        },
+                      ),
                       _buildSingleControlToolbar(isWide),
                       const SizedBox(height: AppSpacing.xs),
 

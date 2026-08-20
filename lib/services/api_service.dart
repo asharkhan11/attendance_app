@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
 import '../config/env_config.dart';
+import '../core/cache/memory_cache.dart';
 import '../utils/app_logger.dart';
 
 class ApiException implements Exception {
@@ -426,6 +427,7 @@ class ApiService {
   }
 
   Future<dynamic> createClass(Object data) => post('/api/v1/classes', data);
+  Future<dynamic> updateClass(String id, Object data) => put('/api/v1/classes/$id', data);
   Future<dynamic> deleteClass(String id) => delete('/api/v1/classes/$id');
   Future<dynamic> getMyClass() => get('/api/v1/classes/my-class');
   Future<dynamic> assignClassTeacher(String classId, String? teacherId) =>
@@ -801,20 +803,32 @@ class ApiService {
   }
 
   // ─── School Days & Holidays ──────────────────────────────────────────────────
-  Future<dynamic> getWeeklySchedule() {
-    return get('/api/v1/school-days/weekly');
+  final _calendarCache = MemoryCache<String, dynamic>(ttl: const Duration(minutes: 2));
+
+  Future<dynamic> getWeeklySchedule() async {
+    final cached = _calendarCache.get('weekly');
+    if (cached != null) return cached;
+    final res = await get('/api/v1/school-days/weekly');
+    _calendarCache.put('weekly', res);
+    return res;
   }
 
-  Future<dynamic> updateWeeklySchedule(List<Map<String, dynamic>> schedules) {
+  Future<dynamic> updateWeeklySchedule(List<Map<String, dynamic>> schedules) async {
+    _calendarCache.invalidateAll();
     return put('/api/v1/school-days/weekly', {'schedules': schedules});
   }
 
-  Future<dynamic> getSchoolHolidays({String? from, String? to}) {
+  Future<dynamic> getSchoolHolidays({String? from, String? to}) async {
+    final cacheKey = 'holidays:${from ?? ""}:${to ?? ""}';
+    final cached = _calendarCache.get(cacheKey);
+    if (cached != null) return cached;
     final query = <String, String>{
       'from': ?from,
       'to': ?to,
     };
-    return get('/api/v1/school-days/holidays', queryParameters: query);
+    final res = await get('/api/v1/school-days/holidays', queryParameters: query);
+    _calendarCache.put(cacheKey, res);
+    return res;
   }
 
   Future<dynamic> addSchoolHoliday({
@@ -822,7 +836,8 @@ class ApiService {
     required String title,
     String? description,
     bool isHoliday = true,
-  }) {
+  }) async {
+    _calendarCache.invalidateAll();
     return post('/api/v1/school-days/holidays', {
       'holiday_date': holidayDate,
       'title': title,
@@ -831,7 +846,8 @@ class ApiService {
     });
   }
 
-  Future<dynamic> deleteSchoolHoliday(String holidayId) {
+  Future<dynamic> deleteSchoolHoliday(String holidayId) async {
+    _calendarCache.invalidateAll();
     return delete('/api/v1/school-days/holidays/$holidayId');
   }
 }

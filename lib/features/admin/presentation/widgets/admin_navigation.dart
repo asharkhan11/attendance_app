@@ -24,7 +24,7 @@ class AdminNavigation extends ConsumerWidget {
     this.onLogoutTap,
   });
 
-  // 8 tabs: Overview(0) + 7 existing (shifted +1)
+  // 9 tabs: Overview(0), Academic Session(1), Attendance Session(2), Analytics(3), Classes(4), Students(5), Teachers(6), Reports(7), School Days(8)
   static const List<VerticalNavDestination> navDestinations = [
     VerticalNavDestination(
       icon: Icons.home_outlined,
@@ -34,7 +34,12 @@ class AdminNavigation extends ConsumerWidget {
     VerticalNavDestination(
       icon: Icons.calendar_today_outlined,
       selectedIcon: Icons.calendar_today_rounded,
-      label: 'Sessions',
+      label: 'Academic Session',
+    ),
+    VerticalNavDestination(
+      icon: Icons.access_time_outlined,
+      selectedIcon: Icons.access_time_filled_rounded,
+      label: 'Attendance Session',
     ),
     VerticalNavDestination(
       icon: Icons.analytics_outlined,
