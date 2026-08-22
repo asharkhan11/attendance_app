@@ -1274,57 +1274,73 @@ class _ClassesTabState extends State<_ClassesTab> {
   void _showCreateClassDialog() {
     final gradeCtrl = TextEditingController();
     final sectionCtrl = TextEditingController();
+    bool isSubmitting = false;
 
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Create Class'),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: gradeCtrl,
-                decoration: const InputDecoration(
-                  labelText: 'Grade Level (e.g. 10)',
-                  border: OutlineInputBorder(),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setD) => AlertDialog(
+          title: const Text('Create Class'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: gradeCtrl,
+                  decoration: const InputDecoration(
+                    labelText: 'Grade Level (e.g. 10)',
+                    border: OutlineInputBorder(),
+                  ),
+                  keyboardType: TextInputType.number,
                 ),
-                keyboardType: TextInputType.number,
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: sectionCtrl,
-                decoration: const InputDecoration(
-                  labelText: 'Section (e.g. A)',
-                  border: OutlineInputBorder(),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: sectionCtrl,
+                  decoration: const InputDecoration(
+                    labelText: 'Section (e.g. A)',
+                    border: OutlineInputBorder(),
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
+          actions: [
+            TextButton(
+              onPressed: isSubmitting ? null : () => Navigator.pop(ctx),
+              child: const Text('CANCEL'),
+            ),
+            ElevatedButton(
+              onPressed: isSubmitting
+                  ? null
+                  : () async {
+                      final nav = Navigator.of(ctx);
+                      setD(() => isSubmitting = true);
+                      try {
+                        await widget.api.createClass({
+                          'grade_level': int.tryParse(gradeCtrl.text.trim()) ?? 0,
+                          'section': sectionCtrl.text.trim(),
+                        });
+                        nav.pop();
+                        widget.snack('Class created successfully', error: false);
+                        widget.onRefresh();
+                      } catch (e) {
+                        setD(() => isSubmitting = false);
+                        widget.snack('Failed to create class: $e');
+                      }
+                    },
+              child: isSubmitting
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
+                  : const Text('CREATE'),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('CANCEL'),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              final nav = Navigator.of(ctx);
-              try {
-                await widget.api.createClass({
-                  'grade_level': int.tryParse(gradeCtrl.text.trim()) ?? 0,
-                  'section': sectionCtrl.text.trim(),
-                });
-                nav.pop();
-                widget.snack('Class created successfully', error: false);
-                widget.onRefresh();
-              } catch (e) {
-                widget.snack('Failed to create class: $e');
-              }
-            },
-            child: const Text('CREATE'),
-          ),
-        ],
       ),
     );
   }
@@ -1332,140 +1348,188 @@ class _ClassesTabState extends State<_ClassesTab> {
   void _showEditClassDialog(SchoolClass c) {
     final gradeCtrl = TextEditingController(text: '${c.gradeLevel}');
     final sectionCtrl = TextEditingController(text: c.section);
+    bool isSubmitting = false;
 
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text('Edit ${c.displayName}'),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: gradeCtrl,
-                decoration: const InputDecoration(
-                  labelText: 'Grade Level (e.g. 10)',
-                  border: OutlineInputBorder(),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setD) => AlertDialog(
+          title: Text('Edit ${c.displayName}'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: gradeCtrl,
+                  decoration: const InputDecoration(
+                    labelText: 'Grade Level (e.g. 10)',
+                    border: OutlineInputBorder(),
+                  ),
+                  keyboardType: TextInputType.number,
                 ),
-                keyboardType: TextInputType.number,
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: sectionCtrl,
-                decoration: const InputDecoration(
-                  labelText: 'Section (e.g. A)',
-                  border: OutlineInputBorder(),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: sectionCtrl,
+                  decoration: const InputDecoration(
+                    labelText: 'Section (e.g. A)',
+                    border: OutlineInputBorder(),
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
+          actions: [
+            TextButton(
+              onPressed: isSubmitting ? null : () => Navigator.pop(ctx),
+              child: const Text('CANCEL'),
+            ),
+            ElevatedButton(
+              onPressed: isSubmitting
+                  ? null
+                  : () async {
+                      final nav = Navigator.of(ctx);
+                      final grade = int.tryParse(gradeCtrl.text.trim()) ?? 0;
+                      final section = sectionCtrl.text.trim();
+                      if (grade < 1 || grade > 12) {
+                        widget.snack('Grade level must be between 1 and 12');
+                        return;
+                      }
+                      if (section.isEmpty) {
+                        widget.snack('Section cannot be empty');
+                        return;
+                      }
+                      setD(() => isSubmitting = true);
+                      try {
+                        await widget.api.updateClass(c.id, {
+                          'grade_level': grade,
+                          'section': section,
+                        });
+                        nav.pop();
+                        widget.snack('Class updated successfully', error: false);
+                        widget.onRefresh();
+                      } catch (e) {
+                        setD(() => isSubmitting = false);
+                        widget.snack('Failed to update class: $e');
+                      }
+                    },
+              child: isSubmitting
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
+                  : const Text('SAVE'),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('CANCEL'),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              final nav = Navigator.of(ctx);
-              final grade = int.tryParse(gradeCtrl.text.trim()) ?? 0;
-              final section = sectionCtrl.text.trim();
-              if (grade < 1 || grade > 12) {
-                widget.snack('Grade level must be between 1 and 12');
-                return;
-              }
-              if (section.isEmpty) {
-                widget.snack('Section cannot be empty');
-                return;
-              }
-              try {
-                await widget.api.updateClass(c.id, {
-                  'grade_level': grade,
-                  'section': section,
-                });
-                nav.pop();
-                widget.snack('Class updated successfully', error: false);
-                widget.onRefresh();
-              } catch (e) {
-                widget.snack('Failed to update class: \$e');
-              }
-            },
-            child: const Text('SAVE'),
-          ),
-        ],
       ),
     );
   }
 
   void _confirmDeleteClass(SchoolClass c) {
+    bool isSubmitting = false;
+
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Delete Class'),
-        content: Text(
-          'Are you sure you want to delete ${c.displayName}?\n\nThis will also permanently delete ALL students in this class. This cannot be undone.',
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setD) => AlertDialog(
+          title: const Text('Delete Class'),
+          content: Text(
+            'Are you sure you want to delete ${c.displayName}?\n\nThis will also permanently delete ALL students in this class. This cannot be undone.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: isSubmitting ? null : () => Navigator.pop(ctx),
+              child: const Text('CANCEL'),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+              onPressed: isSubmitting
+                  ? null
+                  : () async {
+                      final nav = Navigator.of(ctx);
+                      setD(() => isSubmitting = true);
+                      try {
+                        await widget.api.deleteClass(c.id);
+                        nav.pop();
+                        widget.snack('Class deleted', error: false);
+                        widget.onRefresh();
+                      } catch (e) {
+                        setD(() => isSubmitting = false);
+                        widget.snack('Failed to delete class: $e');
+                      }
+                    },
+              child: isSubmitting
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
+                  : const Text('DELETE', style: TextStyle(color: Colors.white)),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('CANCEL'),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            onPressed: () async {
-              final nav = Navigator.of(ctx);
-              try {
-                await widget.api.deleteClass(c.id);
-                nav.pop();
-                widget.snack('Class deleted', error: false);
-                widget.onRefresh();
-              } catch (e) {
-                widget.snack('Failed to delete class: $e');
-              }
-            },
-            child: const Text('DELETE', style: TextStyle(color: Colors.white)),
-          ),
-        ],
       ),
     );
   }
 
   void _showAssignTeacherDialog(SchoolClass sc) {
     User? selected;
+    bool isSubmitting = false;
+
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text('Assign Teacher to ${sc.displayName}'),
-        content: StatefulBuilder(
-          builder: (_, setD) => SearchableDropdown<User>(
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setD) => AlertDialog(
+          title: Text('Assign Teacher to ${sc.displayName}'),
+          content: SearchableDropdown<User>(
             value: selected,
             hintText: 'Choose Teacher',
             items: widget.teachers,
             itemAsString: (t) => '${t.fullName} (${t.email})',
             onChanged: (v) => setD(() => selected = v),
           ),
+          actions: [
+            TextButton(
+              onPressed: isSubmitting ? null : () => Navigator.pop(ctx),
+              child: const Text('CANCEL'),
+            ),
+            ElevatedButton(
+              onPressed: isSubmitting
+                  ? null
+                  : () async {
+                      if (selected == null) return;
+                      final nav = Navigator.of(ctx);
+                      setD(() => isSubmitting = true);
+                      try {
+                        await widget.api.assignClassTeacher(sc.id, selected!.id);
+                        nav.pop();
+                        widget.snack('Teacher assigned', error: false);
+                        widget.onRefresh();
+                      } catch (e) {
+                        setD(() => isSubmitting = false);
+                        widget.snack('Failed to assign teacher: $e');
+                      }
+                    },
+              child: isSubmitting
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
+                  : const Text('ASSIGN'),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('CANCEL'),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              if (selected == null) return;
-              final nav = Navigator.of(ctx);
-              try {
-                await widget.api.assignClassTeacher(sc.id, selected!.id);
-                nav.pop();
-                widget.snack('Teacher assigned', error: false);
-                widget.onRefresh();
-              } catch (e) {
-                widget.snack('Failed to assign teacher: $e');
-              }
-            },
-            child: const Text('ASSIGN'),
-          ),
-        ],
       ),
     );
   }
@@ -1831,13 +1895,106 @@ class _TeachersTabState extends State<_TeachersTab> {
     final emailCtrl = TextEditingController();
     final phoneCtrl = TextEditingController();
     final passCtrl = TextEditingController();
+    bool isSubmitting = false;
 
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Create Teacher'),
-        content: SingleChildScrollView(
-          child: Column(
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setD) => AlertDialog(
+          title: const Text('Create Teacher'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: nameCtrl,
+                  decoration: const InputDecoration(
+                    labelText: 'Full Name',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: emailCtrl,
+                  decoration: const InputDecoration(
+                    labelText: 'Email',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: phoneCtrl,
+                  decoration: const InputDecoration(
+                    labelText: 'Phone',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: passCtrl,
+                  decoration: const InputDecoration(
+                    labelText: 'Password',
+                    border: OutlineInputBorder(),
+                  ),
+                  obscureText: true,
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: isSubmitting ? null : () => Navigator.pop(ctx),
+              child: const Text('CANCEL'),
+            ),
+            ElevatedButton(
+              onPressed: isSubmitting
+                  ? null
+                  : () async {
+                      final nav = Navigator.of(ctx);
+                      setD(() => isSubmitting = true);
+                      try {
+                        await widget.api.createTeacher({
+                          'full_name': nameCtrl.text.trim(),
+                          'email': emailCtrl.text.trim(),
+                          'phone': phoneCtrl.text.trim(),
+                          'password': passCtrl.text,
+                        });
+                        nav.pop();
+                        widget.snack('Teacher created', error: false);
+                        widget.onRefresh();
+                      } catch (e) {
+                        setD(() => isSubmitting = false);
+                        widget.snack('Failed to create teacher: $e');
+                      }
+                    },
+              child: isSubmitting
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
+                  : const Text('CREATE'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showEditTeacherDialog(User t) {
+    final nameCtrl = TextEditingController(text: t.fullName);
+    final phoneCtrl = TextEditingController(text: t.phone ?? '');
+    bool isSubmitting = false;
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setD) => AlertDialog(
+          title: Text('Edit ${t.fullName}'),
+          content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               TextField(
@@ -1849,255 +2006,261 @@ class _TeachersTabState extends State<_TeachersTab> {
               ),
               const SizedBox(height: 12),
               TextField(
-                controller: emailCtrl,
-                decoration: const InputDecoration(
-                  labelText: 'Email',
-                  border: OutlineInputBorder(),
-                ),
-              ),
-              const SizedBox(height: 12),
-              TextField(
                 controller: phoneCtrl,
                 decoration: const InputDecoration(
                   labelText: 'Phone',
                   border: OutlineInputBorder(),
                 ),
               ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: passCtrl,
-                decoration: const InputDecoration(
-                  labelText: 'Password',
-                  border: OutlineInputBorder(),
-                ),
-                obscureText: true,
-              ),
             ],
           ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('CANCEL'),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              final nav = Navigator.of(ctx);
-              try {
-                await widget.api.createTeacher({
-                  'full_name': nameCtrl.text.trim(),
-                  'email': emailCtrl.text.trim(),
-                  'phone': phoneCtrl.text.trim(),
-                  'password': passCtrl.text,
-                });
-                nav.pop();
-                widget.snack('Teacher created', error: false);
-                widget.onRefresh();
-              } catch (e) {
-                widget.snack('Failed to create teacher: $e');
-              }
-            },
-            child: const Text('CREATE'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _showEditTeacherDialog(User t) {
-    final nameCtrl = TextEditingController(text: t.fullName);
-    final phoneCtrl = TextEditingController(text: t.phone ?? '');
-
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text('Edit ${t.fullName}'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: nameCtrl,
-              decoration: const InputDecoration(
-                labelText: 'Full Name',
-                border: OutlineInputBorder(),
-              ),
+          actions: [
+            TextButton(
+              onPressed: isSubmitting ? null : () => Navigator.pop(ctx),
+              child: const Text('CANCEL'),
             ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: phoneCtrl,
-              decoration: const InputDecoration(
-                labelText: 'Phone',
-                border: OutlineInputBorder(),
-              ),
+            ElevatedButton(
+              onPressed: isSubmitting
+                  ? null
+                  : () async {
+                      final nav = Navigator.of(ctx);
+                      setD(() => isSubmitting = true);
+                      try {
+                        await widget.api.updateTeacher(t.id, {
+                          'full_name': nameCtrl.text.trim(),
+                          'phone': phoneCtrl.text.trim(),
+                        });
+                        nav.pop();
+                        widget.snack('Teacher updated', error: false);
+                        widget.onRefresh();
+                      } catch (e) {
+                        setD(() => isSubmitting = false);
+                        widget.snack('Failed to update teacher: $e');
+                      }
+                    },
+              child: isSubmitting
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
+                  : const Text('SAVE'),
             ),
           ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('CANCEL'),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              final nav = Navigator.of(ctx);
-              try {
-                await widget.api.updateTeacher(t.id, {
-                  'full_name': nameCtrl.text.trim(),
-                  'phone': phoneCtrl.text.trim(),
-                });
-                nav.pop();
-                widget.snack('Teacher updated', error: false);
-                widget.onRefresh();
-              } catch (e) {
-                widget.snack('Failed to update teacher: $e');
-              }
-            },
-            child: const Text('SAVE'),
-          ),
-        ],
       ),
     );
   }
 
   void _confirmDeactivate(User t) {
+    bool isSubmitting = false;
+
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Deactivate Teacher'),
-        content: Text(
-          'Deactivate ${t.fullName}? They will no longer be able to log in.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('CANCEL'),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setD) => AlertDialog(
+          title: const Text('Deactivate Teacher'),
+          content: Text(
+            'Deactivate ${t.fullName}? They will no longer be able to log in.',
           ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
-            onPressed: () async {
-              final nav = Navigator.of(ctx);
-              try {
-                await widget.api.deactivateTeacher(t.id);
-                nav.pop();
-                widget.snack('Teacher deactivated', error: false);
-                widget.onRefresh();
-              } catch (e) {
-                widget.snack('Failed to deactivate: $e');
-              }
-            },
-            child: const Text(
-              'DEACTIVATE',
-              style: TextStyle(color: Colors.white),
+          actions: [
+            TextButton(
+              onPressed: isSubmitting ? null : () => Navigator.pop(ctx),
+              child: const Text('CANCEL'),
             ),
-          ),
-        ],
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
+              onPressed: isSubmitting
+                  ? null
+                  : () async {
+                      final nav = Navigator.of(ctx);
+                      setD(() => isSubmitting = true);
+                      try {
+                        await widget.api.deactivateTeacher(t.id);
+                        nav.pop();
+                        widget.snack('Teacher deactivated', error: false);
+                        widget.onRefresh();
+                      } catch (e) {
+                        setD(() => isSubmitting = false);
+                        widget.snack('Failed to deactivate: $e');
+                      }
+                    },
+              child: isSubmitting
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
+                  : const Text(
+                      'DEACTIVATE',
+                      style: TextStyle(color: Colors.white),
+                    ),
+            ),
+          ],
+        ),
       ),
     );
   }
 
   void _confirmActivate(User t) {
+    bool isSubmitting = false;
+
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Reactivate Teacher'),
-        content: Text(
-          'Reactivate ${t.fullName}? They will be able to log in again.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('CANCEL'),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setD) => AlertDialog(
+          title: const Text('Reactivate Teacher'),
+          content: Text(
+            'Reactivate ${t.fullName}? They will be able to log in again.',
           ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
-            onPressed: () async {
-              final nav = Navigator.of(ctx);
-              try {
-                await widget.api.activateTeacher(t.id);
-                nav.pop();
-                widget.snack('Teacher reactivated', error: false);
-                widget.onRefresh();
-              } catch (e) {
-                widget.snack('Failed to reactivate: $e');
-              }
-            },
-            child: const Text(
-              'REACTIVATE',
-              style: TextStyle(color: Colors.white),
+          actions: [
+            TextButton(
+              onPressed: isSubmitting ? null : () => Navigator.pop(ctx),
+              child: const Text('CANCEL'),
             ),
-          ),
-        ],
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
+              onPressed: isSubmitting
+                  ? null
+                  : () async {
+                      final nav = Navigator.of(ctx);
+                      setD(() => isSubmitting = true);
+                      try {
+                        await widget.api.activateTeacher(t.id);
+                        nav.pop();
+                        widget.snack('Teacher reactivated', error: false);
+                        widget.onRefresh();
+                      } catch (e) {
+                        setD(() => isSubmitting = false);
+                        widget.snack('Failed to reactivate: $e');
+                      }
+                    },
+              child: isSubmitting
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
+                  : const Text(
+                      'REACTIVATE',
+                      style: TextStyle(color: Colors.white),
+                    ),
+            ),
+          ],
+        ),
       ),
     );
   }
 
   void _confirmDeleteTeacher(User t) {
+    bool isSubmitting = false;
+
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Delete Teacher'),
-        content: Text(
-          'Are you sure you want to delete ${t.fullName}? This action cannot be undone.',
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setD) => AlertDialog(
+          title: const Text('Delete Teacher'),
+          content: Text(
+            'Are you sure you want to delete ${t.fullName}? This action cannot be undone.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: isSubmitting ? null : () => Navigator.pop(ctx),
+              child: const Text('CANCEL'),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+              onPressed: isSubmitting
+                  ? null
+                  : () async {
+                      final nav = Navigator.of(ctx);
+                      setD(() => isSubmitting = true);
+                      try {
+                        await widget.api.deleteTeacher(t.id);
+                        nav.pop();
+                        widget.snack('Teacher deleted', error: false);
+                        widget.onRefresh();
+                      } catch (e) {
+                        setD(() => isSubmitting = false);
+                        widget.snack('Failed to delete teacher: $e');
+                      }
+                    },
+              child: isSubmitting
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
+                  : const Text('DELETE', style: TextStyle(color: Colors.white)),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('CANCEL'),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            onPressed: () async {
-              final nav = Navigator.of(ctx);
-              try {
-                await widget.api.deleteTeacher(t.id);
-                nav.pop();
-                widget.snack('Teacher deleted', error: false);
-                widget.onRefresh();
-              } catch (e) {
-                widget.snack('Failed to delete teacher: $e');
-              }
-            },
-            child: const Text('DELETE', style: TextStyle(color: Colors.white)),
-          ),
-        ],
       ),
     );
   }
 
   void _showResetPasswordDialog(User t) {
     final passCtrl = TextEditingController();
+    bool isSubmitting = false;
 
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text('Reset Password — ${t.fullName}'),
-        content: TextField(
-          controller: passCtrl,
-          decoration: const InputDecoration(
-            labelText: 'New Password',
-            border: OutlineInputBorder(),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setD) => AlertDialog(
+          title: Text('Reset Password — ${t.fullName}'),
+          content: TextField(
+            controller: passCtrl,
+            decoration: const InputDecoration(
+              labelText: 'New Password',
+              border: OutlineInputBorder(),
+            ),
+            obscureText: true,
           ),
-          obscureText: true,
+          actions: [
+            TextButton(
+              onPressed: isSubmitting ? null : () => Navigator.pop(ctx),
+              child: const Text('CANCEL'),
+            ),
+            ElevatedButton(
+              onPressed: isSubmitting
+                  ? null
+                  : () async {
+                      final nav = Navigator.of(ctx);
+                      setD(() => isSubmitting = true);
+                      try {
+                        await widget.api.resetTeacherPassword(t.id, passCtrl.text);
+                        nav.pop();
+                        widget.snack('Password reset successfully', error: false);
+                      } catch (e) {
+                        setD(() => isSubmitting = false);
+                        widget.snack('Failed to reset password: $e');
+                      }
+                    },
+              child: isSubmitting
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
+                  : const Text('RESET'),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('CANCEL'),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              final nav = Navigator.of(ctx);
-              try {
-                await widget.api.resetTeacherPassword(t.id, passCtrl.text);
-                nav.pop();
-                widget.snack('Password reset successfully', error: false);
-              } catch (e) {
-                widget.snack('Failed to reset password: $e');
-              }
-            },
-            child: const Text('RESET'),
-          ),
-        ],
       ),
     );
   }
@@ -3121,34 +3284,51 @@ class _StudentsTabState extends State<_StudentsTab> {
   }
 
   void _confirmDeleteStudent(Student s) {
+    bool isSubmitting = false;
+
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Delete Student'),
-        content: Text(
-          'Are you sure you want to delete ${s.fullName} (Adm: ${s.admissionNumber}, Roll: ${s.rollNumber})? This action cannot be undone.',
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setD) => AlertDialog(
+          title: const Text('Delete Student'),
+          content: Text(
+            'Are you sure you want to delete ${s.fullName} (Adm: ${s.admissionNumber}, Roll: ${s.rollNumber})? This action cannot be undone.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: isSubmitting ? null : () => Navigator.pop(ctx),
+              child: const Text('CANCEL'),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+              onPressed: isSubmitting
+                  ? null
+                  : () async {
+                      final nav = Navigator.of(ctx);
+                      setD(() => isSubmitting = true);
+                      try {
+                        await widget.api.deleteStudent(s.id);
+                        nav.pop();
+                        widget.snack('Student deleted successfully', error: false);
+                        _loadStudents();
+                      } catch (e) {
+                        setD(() => isSubmitting = false);
+                        widget.snack('Failed to delete student: $e');
+                      }
+                    },
+              child: isSubmitting
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
+                  : const Text('DELETE', style: TextStyle(color: Colors.white)),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('CANCEL'),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            onPressed: () async {
-              final nav = Navigator.of(ctx);
-              try {
-                await widget.api.deleteStudent(s.id);
-                nav.pop();
-                widget.snack('Student deleted successfully', error: false);
-                _loadStudents();
-              } catch (e) {
-                widget.snack('Failed to delete student: $e');
-              }
-            },
-            child: const Text('DELETE', style: TextStyle(color: Colors.white)),
-          ),
-        ],
       ),
     );
   }
@@ -6229,6 +6409,7 @@ class _SchoolDaysTabState extends State<_SchoolDaysTab> {
     final descCtrl = TextEditingController();
     DateTime selectedDate = initialDate ?? DateTime.now();
     bool isHoliday = initialIsHoliday;
+    bool isSubmitting = false;
 
     await showDialog(
       context: context,
@@ -6288,17 +6469,19 @@ class _SchoolDaysTabState extends State<_SchoolDaysTab> {
                     ),
                     const SizedBox(height: 16),
                     InkWell(
-                      onTap: () async {
-                        final picked = await showDatePicker(
-                          context: context,
-                          initialDate: selectedDate,
-                          firstDate: DateTime(2025, 1, 1),
-                          lastDate: DateTime(2030, 12, 31),
-                        );
-                        if (picked != null) {
-                          setDlgState(() => selectedDate = picked);
-                        }
-                      },
+                      onTap: isSubmitting
+                          ? null
+                          : () async {
+                              final picked = await showDatePicker(
+                                context: context,
+                                initialDate: selectedDate,
+                                firstDate: DateTime(2025, 1, 1),
+                                lastDate: DateTime(2030, 12, 31),
+                              );
+                              if (picked != null) {
+                                setDlgState(() => selectedDate = picked);
+                              }
+                            },
                       child: Container(
                         padding: const EdgeInsets.symmetric(
                           horizontal: 12,
@@ -6348,42 +6531,58 @@ class _SchoolDaysTabState extends State<_SchoolDaysTab> {
                         style: const TextStyle(fontSize: 12),
                       ),
                       value: isHoliday,
-                      onChanged: (val) => setDlgState(() => isHoliday = val),
+                      onChanged: isSubmitting
+                          ? null
+                          : (val) => setDlgState(() => isHoliday = val),
                     ),
                   ],
                 ),
               ),
               actions: [
                 TextButton(
-                  onPressed: () => Navigator.pop(ctx),
+                  onPressed: isSubmitting ? null : () => Navigator.pop(ctx),
                   child: const Text('Cancel'),
                 ),
                 ElevatedButton(
-                  onPressed: () async {
-                    if (titleCtrl.text.trim().isEmpty) {
-                      widget.snack('Please enter a holiday title');
-                      return;
-                    }
-                    Navigator.pop(ctx);
-                    try {
-                      await widget.api.addSchoolHoliday(
-                        holidayDate: dateStr,
-                        title: titleCtrl.text.trim(),
-                        description: descCtrl.text.trim().isEmpty
-                            ? null
-                            : descCtrl.text.trim(),
-                        isHoliday: isHoliday,
-                      );
-                      widget.snack(
-                        'Holiday declared successfully!',
-                        error: false,
-                      );
-                      _loadHolidays();
-                    } catch (e) {
-                      widget.snack('Error creating holiday: $e');
-                    }
-                  },
-                  child: const Text('Save Holiday'),
+                  onPressed: isSubmitting
+                      ? null
+                      : () async {
+                          if (titleCtrl.text.trim().isEmpty) {
+                            widget.snack('Please enter a holiday title');
+                            return;
+                          }
+                          final nav = Navigator.of(ctx);
+                          setDlgState(() => isSubmitting = true);
+                          try {
+                            await widget.api.addSchoolHoliday(
+                              holidayDate: dateStr,
+                              title: titleCtrl.text.trim(),
+                              description: descCtrl.text.trim().isEmpty
+                                  ? null
+                                  : descCtrl.text.trim(),
+                              isHoliday: isHoliday,
+                            );
+                            nav.pop();
+                            widget.snack(
+                              'Holiday declared successfully!',
+                              error: false,
+                            );
+                            _loadHolidays();
+                          } catch (e) {
+                            setDlgState(() => isSubmitting = false);
+                            widget.snack('Error creating holiday: $e');
+                          }
+                        },
+                  child: isSubmitting
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : const Text('Save Holiday'),
                 ),
               ],
             );

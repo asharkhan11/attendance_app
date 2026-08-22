@@ -494,36 +494,37 @@ class _MarkAttendanceScreenState extends State<MarkAttendanceScreen> {
     final remarksCtrl = TextEditingController(text: entry.remarks ?? '');
     final attTheme = Theme.of(context).extension<AttendanceTheme>() ?? AttendanceTheme.light;
 
+    bool isSubmitting = false;
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Row(
-          children: [
-            CircleAvatar(
-              backgroundColor: Theme.of(context).primaryColor.withValues(alpha: 0.1),
-              child: Icon(Icons.person_rounded, color: Theme.of(context).primaryColor),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    entry.fullName,
-                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                  ),
-                  Text(
-                    'Roll No: ${entry.rollNumber}',
-                    style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
-                  ),
-                ],
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setD) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: Row(
+            children: [
+              CircleAvatar(
+                backgroundColor: Theme.of(context).primaryColor.withValues(alpha: 0.1),
+                child: Icon(Icons.person_rounded, color: Theme.of(context).primaryColor),
               ),
-            ),
-          ],
-        ),
-        content: StatefulBuilder(
-          builder: (_, setD) => Column(
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      entry.fullName,
+                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                    ),
+                    Text(
+                      'Roll No: ${entry.rollNumber}',
+                      style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               SearchableDropdown<String>(
@@ -538,12 +539,14 @@ class _MarkAttendanceScreenState extends State<MarkAttendanceScreen> {
                     fontWeight: FontWeight.bold,
                   ),
                 ),
-                onChanged: (v) =>
-                    setD(() => selectedStatus = v ?? selectedStatus),
+                onChanged: isSubmitting
+                    ? null
+                    : (v) => setD(() => selectedStatus = v ?? selectedStatus),
               ),
               const SizedBox(height: 14),
               TextField(
                 controller: remarksCtrl,
+                enabled: !isSubmitting,
                 decoration: InputDecoration(
                   labelText: 'Remarks / Reason for Absence',
                   hintText: 'e.g. Sick leave, Medical note submitted',
@@ -553,60 +556,73 @@ class _MarkAttendanceScreenState extends State<MarkAttendanceScreen> {
               ),
             ],
           ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('CANCEL'),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Theme.of(context).primaryColor,
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          actions: [
+            TextButton(
+              onPressed: isSubmitting ? null : () => Navigator.pop(ctx),
+              child: const Text('CANCEL'),
             ),
-            onPressed: () async {
-              final nav = Navigator.of(ctx);
-              try {
-                final body = <String, dynamic>{'status': selectedStatus};
-                final rem = remarksCtrl.text.trim();
-                if (rem.isNotEmpty) body['remarks'] = rem;
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Theme.of(context).primaryColor,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+              onPressed: isSubmitting
+                  ? null
+                  : () async {
+                      final nav = Navigator.of(ctx);
+                      setD(() => isSubmitting = true);
+                      try {
+                        final body = <String, dynamic>{'status': selectedStatus};
+                        final rem = remarksCtrl.text.trim();
+                        if (rem.isNotEmpty) body['remarks'] = rem;
 
-                await _apiService.updateAttendanceMark(
-                  widget.session.id,
-                  entry.studentId,
-                  body,
-                );
-                setState(() {
-                  entry.status = selectedStatus;
-                  entry.remarks = rem.isNotEmpty ? rem : null;
-                });
-                nav.pop();
-                widget.onSessionUpdated?.call();
-                if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text('Updated ${entry.fullName}'),
-                      backgroundColor: attTheme.present,
-                      behavior: SnackBarBehavior.floating,
-                    ),
-                  );
-                }
-              } catch (e) {
-                if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text('Failed to update: $e'),
-                      backgroundColor: Colors.redAccent,
-                      behavior: SnackBarBehavior.floating,
-                    ),
-                  );
-                }
-              }
-            },
-            child: const Text('SAVE REMARKS'),
-          ),
-        ],
+                        await _apiService.updateAttendanceMark(
+                          widget.session.id,
+                          entry.studentId,
+                          body,
+                        );
+                        setState(() {
+                          entry.status = selectedStatus;
+                          entry.remarks = rem.isNotEmpty ? rem : null;
+                        });
+                        nav.pop();
+                        widget.onSessionUpdated?.call();
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text('Updated ${entry.fullName}'),
+                              backgroundColor: attTheme.present,
+                              behavior: SnackBarBehavior.floating,
+                            ),
+                          );
+                        }
+                      } catch (e) {
+                        setD(() => isSubmitting = false);
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text('Failed to update: $e'),
+                              backgroundColor: Colors.redAccent,
+                              behavior: SnackBarBehavior.floating,
+                            ),
+                          );
+                        }
+                      }
+                    },
+              child: isSubmitting
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
+                  : const Text('SAVE REMARKS'),
+            ),
+          ],
+        ),
       ),
     );
   }
