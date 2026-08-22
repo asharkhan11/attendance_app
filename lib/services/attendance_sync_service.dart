@@ -127,15 +127,24 @@ class AttendanceSyncService {
 
     for (final item in queue) {
       try {
+        String dateStr = item.sessionDate.trim();
+        if (dateStr.contains('T')) dateStr = dateStr.split('T')[0];
+        if (dateStr.contains(' ')) dateStr = dateStr.split(' ')[0];
+        final parsedDt = DateTime.tryParse(dateStr);
+        if (parsedDt != null) {
+          dateStr =
+              "${parsedDt.year.toString().padLeft(4, '0')}-${parsedDt.month.toString().padLeft(2, '0')}-${parsedDt.day.toString().padLeft(2, '0')}";
+        }
+
         AppLogger.i(
           'AttendanceSyncService',
-          'Syncing session batch for Class ${item.className} on ${item.sessionDate} (P${item.periodNumber})...',
+          'Syncing session batch for Class ${item.className} on $dateStr (P${item.periodNumber})...',
         );
 
         // 1. Get or create the backend session idempotently
         final sessionRes = await _apiService.createAttendanceSession({
           'class_id': item.classId,
-          'session_date': item.sessionDate,
+          'session_date': dateStr,
           'period_number': item.periodNumber,
         });
 

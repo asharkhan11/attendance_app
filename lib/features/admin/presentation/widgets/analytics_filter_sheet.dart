@@ -88,7 +88,7 @@ class _AnalyticsFilterSheetState extends State<AnalyticsFilterSheet> {
           SearchableDropdown<SchoolClass?>(
             value: _localClass,
             labelText: 'Class',
-            items: [null, ...widget.classes],
+            items: [null, ...(List<SchoolClass>.from(widget.classes)..sort(compareSchoolClasses))],
             itemAsString: (c) => c == null ? 'All Classes' : c.displayName,
             onChanged: (v) => setState(() => _localClass = v),
           ),

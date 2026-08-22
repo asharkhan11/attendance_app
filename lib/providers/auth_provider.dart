@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import '../models/app_models.dart';
 import '../services/api_service.dart';
+import '../services/offline_storage_service.dart';
 import '../utils/app_logger.dart';
 
 class AuthProvider extends ChangeNotifier {
   final ApiService _apiService = ApiService();
+  final OfflineStorageService _storage = OfflineStorageService();
 
   User? _currentUser;
   bool _isLoading = false;
@@ -44,6 +46,7 @@ class AuthProvider extends ChangeNotifier {
       );
       if (res != null && res['user'] != null) {
         _currentUser = User.fromJson(res['user']);
+        await _storage.cacheUserProfile(_currentUser!);
         AppLogger.i('AuthProvider', 'Login successful for user ${_currentUser?.email} (${_currentUser?.role})');
         _isLoading = false;
         notifyListeners();
@@ -85,27 +88,48 @@ class AuthProvider extends ChangeNotifier {
   }
 
   Future<void> loadProfile() async {
-    AppLogger.d('AuthProvider', 'Loading user profile from token...');
+    AppLogger.d('AuthProvider', 'Loading user profile from storage/token...');
     _isLoading = true;
     notifyListeners();
+
+    // 1. Immediately hydrate cached user profile if present for instantaneous offline launch
+    final cachedUser = await _storage.getCachedUserProfile();
+    if (cachedUser != null) {
+      _currentUser = cachedUser;
+      AppLogger.i('AuthProvider', 'Loaded cached user profile for ${_currentUser?.email} (${_currentUser?.role})');
+      notifyListeners();
+    }
+
     final token = await _apiService.getToken();
     if (token == null) {
-      AppLogger.d('AuthProvider', 'No saved token found');
+      if (_currentUser == null) {
+        AppLogger.d('AuthProvider', 'No saved token found');
+      }
       _isLoading = false;
       notifyListeners();
       return;
     }
 
+    // 2. Refresh profile from backend if online
     try {
       final res = await _apiService.me();
       if (res != null) {
         _currentUser = User.fromJson(res);
-        AppLogger.i('AuthProvider', 'User profile loaded: ${_currentUser?.email} (${_currentUser?.role})');
+        await _storage.cacheUserProfile(_currentUser!);
+        AppLogger.i('AuthProvider', 'User profile refreshed from server: ${_currentUser?.email} (${_currentUser?.role})');
         notifyListeners();
       }
+    } on ApiException catch (e) {
+      // Only logout if token is explicitly rejected as unauthorized/forbidden
+      if (e.statusCode == 401 || e.statusCode == 403) {
+        AppLogger.w('AuthProvider', 'Token expired or unauthorized (${e.statusCode}), logging out.');
+        await logout();
+      } else {
+        AppLogger.w('AuthProvider', 'Non-fatal API error fetching profile (${e.statusCode}): ${e.message}. Retaining cached user.');
+      }
     } catch (e, stack) {
-      AppLogger.w('AuthProvider', 'Failed to load profile from stored token', error: e, stackTrace: stack);
-      await logout();
+      // Network/Socket/Timeout error: DO NOT logout. Retain offline cached session.
+      AppLogger.w('AuthProvider', 'Could not refresh profile over network (offline mode). Retaining cached session.', error: e, stackTrace: stack);
     } finally {
       _isLoading = false;
       notifyListeners();
@@ -123,6 +147,7 @@ class AuthProvider extends ChangeNotifier {
       AppLogger.w('AuthProvider', 'Error during remote logout call', error: e);
     }
     await _apiService.clearTokens();
+    await _storage.clearUserProfile();
     _currentUser = null;
     notifyListeners();
     AppLogger.i('AuthProvider', 'User logged out and session cleared');

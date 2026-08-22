@@ -63,7 +63,7 @@ void main() {
 
       expect(cached.length, 1);
       expect(cached.first.id, 'c1');
-      expect(cached.first.displayName, 'Grade 10-A');
+      expect(cached.first.displayName, 'Grade 10 - A');
     });
 
     test('OfflineStorageService caches and retrieves class student roster', () async {

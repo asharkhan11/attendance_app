@@ -470,16 +470,18 @@ class _AdminOverviewScreenState extends State<AdminOverviewScreen> {
       }
     }
 
+    final sortedClasses = List<SchoolClass>.from(widget.classes)..sort(compareSchoolClasses);
+
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(4),
         child: ListView.separated(
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
-          itemCount: widget.classes.length,
+          itemCount: sortedClasses.length,
           separatorBuilder: (_, _) => const Divider(height: 1),
           itemBuilder: (context, i) {
-            final cls = widget.classes[i];
+            final cls = sortedClasses[i];
             final hasSession = sessionClassIds.contains(cls.id);
             final isClosed = closedClassIds.contains(cls.id);
 

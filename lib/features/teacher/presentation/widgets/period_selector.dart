@@ -54,7 +54,7 @@ class PeriodSelector extends ConsumerWidget {
                 final p = i + 1;
                 return DropdownMenuItem<int>(
                   value: p,
-                  child: Text('Period $p'),
+                  child: Text('$p'),
                 );
               }),
               onChanged: (p) {

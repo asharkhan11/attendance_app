@@ -32,11 +32,16 @@ class AttendanceSyncQueueItem {
   });
 
   factory AttendanceSyncQueueItem.fromJson(Map<String, dynamic> json) {
+    String sDate = json['session_date']?.toString() ?? '';
+    if (sDate.contains('T')) sDate = sDate.split('T')[0];
+    if (sDate.contains(' ')) sDate = sDate.split(' ')[0];
+    sDate = sDate.trim();
+
     return AttendanceSyncQueueItem(
       id: json['id'] ?? '',
       classId: json['class_id'] ?? '',
       className: json['class_name'] ?? 'Class',
-      sessionDate: json['session_date'] ?? '',
+      sessionDate: sDate,
       periodNumber: (json['period_number'] as num?)?.toInt() ?? 1,
       marks: (json['marks'] as List<dynamic>?)
               ?.map((m) => Map<String, dynamic>.from(m as Map))
@@ -71,6 +76,7 @@ class OfflineStorageService {
   factory OfflineStorageService() => _instance;
   OfflineStorageService._internal();
 
+  static const String _kKeyUserProfile = 'offline_user_profile';
   static const String _kKeyAssignedClasses = 'offline_assigned_classes';
   static const String _kKeyRosterPrefix = 'offline_roster_class_';
   static const String _kKeySessionRosterPrefix = 'offline_session_roster_';
@@ -82,6 +88,40 @@ class OfflineStorageService {
   Future<SharedPreferences> _getPrefs() async {
     _prefs ??= await SharedPreferences.getInstance();
     return _prefs!;
+  }
+
+  // ─── User Profile Cache ───────────────────────────────────────────────────
+
+  Future<void> cacheUserProfile(User user) async {
+    try {
+      final prefs = await _getPrefs();
+      await prefs.setString(_kKeyUserProfile, jsonEncode(user.toJson()));
+      AppLogger.d('OfflineStorage', 'Cached user profile locally (${user.email})');
+    } catch (e) {
+      AppLogger.w('OfflineStorage', 'Error caching user profile: $e');
+    }
+  }
+
+  Future<User?> getCachedUserProfile() async {
+    try {
+      final prefs = await _getPrefs();
+      final raw = prefs.getString(_kKeyUserProfile);
+      if (raw == null || raw.isEmpty) return null;
+      return User.fromJson(Map<String, dynamic>.from(jsonDecode(raw)));
+    } catch (e) {
+      AppLogger.w('OfflineStorage', 'Error reading cached user profile: $e');
+      return null;
+    }
+  }
+
+  Future<void> clearUserProfile() async {
+    try {
+      final prefs = await _getPrefs();
+      await prefs.remove(_kKeyUserProfile);
+      AppLogger.d('OfflineStorage', 'Cleared cached user profile');
+    } catch (e) {
+      AppLogger.w('OfflineStorage', 'Error clearing cached user profile: $e');
+    }
   }
 
   // ─── Assigned Classes Cache ────────────────────────────────────────────────
@@ -103,7 +143,9 @@ class OfflineStorageService {
       final raw = prefs.getString(_kKeyAssignedClasses);
       if (raw == null || raw.isEmpty) return [];
       final List<dynamic> list = jsonDecode(raw);
-      return list.map((x) => SchoolClass.fromJson(Map<String, dynamic>.from(x))).toList();
+      final classes = list.map((x) => SchoolClass.fromJson(Map<String, dynamic>.from(x))).toList();
+      classes.sort(compareSchoolClasses);
+      return classes;
     } catch (e) {
       AppLogger.w('OfflineStorage', 'Error reading cached classes: $e');
       return [];
@@ -115,7 +157,8 @@ class OfflineStorageService {
   Future<void> cacheClassRoster(String classId, List<Student> students) async {
     try {
       final prefs = await _getPrefs();
-      final jsonList = students.map((s) => s.toJson()).toList();
+      final sortedStudents = List<Student>.from(students)..sort(compareStudentsByRoll);
+      final jsonList = sortedStudents.map((s) => s.toJson()).toList();
       await prefs.setString('$_kKeyRosterPrefix$classId', jsonEncode(jsonList));
       AppLogger.d('OfflineStorage', 'Cached ${students.length} students for class $classId');
     } catch (e) {
@@ -129,7 +172,9 @@ class OfflineStorageService {
       final raw = prefs.getString('$_kKeyRosterPrefix$classId');
       if (raw == null || raw.isEmpty) return [];
       final List<dynamic> list = jsonDecode(raw);
-      return list.map((x) => Student.fromJson(Map<String, dynamic>.from(x))).toList();
+      final students = list.map((x) => Student.fromJson(Map<String, dynamic>.from(x))).toList();
+      students.sort(compareStudentsByRoll);
+      return students;
     } catch (e) {
       AppLogger.w('OfflineStorage', 'Error reading cached roster for $classId: $e');
       return [];

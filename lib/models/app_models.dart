@@ -29,6 +29,16 @@ class User {
     );
   }
 
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'school_id': schoolId,
+        'role': role,
+        'full_name': fullName,
+        'email': email,
+        'phone': phone,
+        'is_active': isActive,
+      };
+
   bool get isAdmin => role == 'admin';
   bool get isTeacher => role == 'teacher';
 }
@@ -101,7 +111,7 @@ class SchoolClass {
   });
 
   String get displayName => gradeLevel > 0 && section.isNotEmpty
-      ? 'Grade $gradeLevel-$section'
+      ? 'Grade $gradeLevel - $section'
       : 'Class $id';
 
   factory SchoolClass.fromJson(Map<String, dynamic> json) {
@@ -221,12 +231,19 @@ class AttendanceSession {
       id: json['id'] ?? '',
       classId: json['class_id'] ?? '',
       teacherId: json['teacher_id'] ?? '',
-      sessionDate: json['session_date'] ?? '',
+      sessionDate: json['session_date']?.toString() ?? '',
       periodNumber: (json['period_number'] as num?)?.toInt() ?? 1,
       status: json['status'] ?? 'open',
       isFinalized: json['is_finalized'] == true,
       finalizedAt: json['finalized_at']?.toString(),
     );
+  }
+
+  String get formattedDate {
+    String s = sessionDate.trim();
+    if (s.contains('T')) s = s.split('T')[0];
+    if (s.contains(' ')) s = s.split(' ')[0];
+    return s;
   }
 
   Map<String, dynamic> toJson() => {
@@ -410,5 +427,50 @@ class SchoolHoliday {
       isHoliday: json['is_holiday'] ?? true,
     );
   }
+}
+
+// ─── Global Sort Comparators (Grade for Classes, Roll Number for Students) ───
+
+int compareSchoolClasses(SchoolClass a, SchoolClass b) {
+  if (a.gradeLevel != b.gradeLevel) {
+    return a.gradeLevel.compareTo(b.gradeLevel);
+  }
+  return a.section.compareTo(b.section);
+}
+
+int compareStudentsByRoll(Student a, Student b) {
+  final rollA = int.tryParse(a.rollNumber.trim());
+  final rollB = int.tryParse(b.rollNumber.trim());
+  if (rollA != null && rollB != null) {
+    if (rollA != rollB) return rollA.compareTo(rollB);
+  } else if (a.rollNumber.isNotEmpty || b.rollNumber.isNotEmpty) {
+    final cmp = a.rollNumber.compareTo(b.rollNumber);
+    if (cmp != 0) return cmp;
+  }
+  return a.fullName.compareTo(b.fullName);
+}
+
+int compareRosterEntriesByRoll(RosterEntry a, RosterEntry b) {
+  final rollA = int.tryParse(a.rollNumber.trim());
+  final rollB = int.tryParse(b.rollNumber.trim());
+  if (rollA != null && rollB != null) {
+    if (rollA != rollB) return rollA.compareTo(rollB);
+  } else if (a.rollNumber.isNotEmpty || b.rollNumber.isNotEmpty) {
+    final cmp = a.rollNumber.compareTo(b.rollNumber);
+    if (cmp != 0) return cmp;
+  }
+  return a.fullName.compareTo(b.fullName);
+}
+
+int compareDefaultersByRoll(Defaulter a, Defaulter b) {
+  final rollA = int.tryParse(a.rollNumber.trim());
+  final rollB = int.tryParse(b.rollNumber.trim());
+  if (rollA != null && rollB != null) {
+    if (rollA != rollB) return rollA.compareTo(rollB);
+  } else if (a.rollNumber.isNotEmpty || b.rollNumber.isNotEmpty) {
+    final cmp = a.rollNumber.compareTo(b.rollNumber);
+    if (cmp != 0) return cmp;
+  }
+  return a.fullName.compareTo(b.fullName);
 }
 

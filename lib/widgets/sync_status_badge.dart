@@ -258,7 +258,7 @@ class SyncStatusBadge extends StatelessWidget {
                                         crossAxisAlignment: CrossAxisAlignment.start,
                                         children: [
                                           Text(
-                                            '${item.className} • Period ${item.periodNumber}',
+                                            item.className,
                                             style: const TextStyle(
                                               fontWeight: FontWeight.w600,
                                               fontSize: 13,
@@ -284,6 +284,43 @@ class SyncStatusBadge extends StatelessWidget {
                                             ),
                                         ],
                                       ),
+                                    ),
+                                    IconButton(
+                                      icon: const Icon(
+                                        Icons.delete_outline_rounded,
+                                        color: Colors.redAccent,
+                                        size: 20,
+                                      ),
+                                      tooltip: 'Discard offline batch',
+                                      onPressed: () async {
+                                        final confirm = await showDialog<bool>(
+                                          context: context,
+                                          builder: (dCtx) => AlertDialog(
+                                            title: const Text('Discard Offline Batch?'),
+                                            content: Text(
+                                              'Are you sure you want to remove the pending attendance records for ${item.className} from the local offline queue?',
+                                            ),
+                                            actions: [
+                                              TextButton(
+                                                onPressed: () => Navigator.pop(dCtx, false),
+                                                child: const Text('Cancel'),
+                                              ),
+                                              TextButton(
+                                                onPressed: () => Navigator.pop(dCtx, true),
+                                                style: TextButton.styleFrom(
+                                                  foregroundColor: Colors.red,
+                                                ),
+                                                child: const Text('Discard'),
+                                              ),
+                                            ],
+                                          ),
+                                        );
+                                        if (confirm == true) {
+                                          await storage.removeSyncItem(item.id);
+                                          await syncService.refreshPendingCount();
+                                          setModalState(() {});
+                                        }
+                                      },
                                     ),
                                   ],
                                 ),

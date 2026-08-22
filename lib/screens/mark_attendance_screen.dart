@@ -41,7 +41,6 @@ class _MarkAttendanceScreenState extends State<MarkAttendanceScreen> {
   bool _isSaving = false;
   List<RosterEntry> _roster = [];
   bool _isClosed = false;
-  bool _isOfflineRoster = false;
   String _filterStatus =
       'all'; // 'all', 'present', 'absent', 'late', 'excused'
 
@@ -133,8 +132,9 @@ class _MarkAttendanceScreenState extends State<MarkAttendanceScreen> {
 
         final rosterList = data['roster'] as List?;
         if (rosterList != null) {
-          _roster = rosterList.map((x) => RosterEntry.fromJson(x)).toList();
-          _isOfflineRoster = false;
+          final parsed = rosterList.map((x) => RosterEntry.fromJson(x)).toList()
+            ..sort(compareRosterEntriesByRoll);
+          _roster = parsed;
         }
 
         // Cache session roster locally for future offline usage
@@ -174,17 +174,19 @@ class _MarkAttendanceScreenState extends State<MarkAttendanceScreen> {
         }
       }
 
+      final parsed = cachedStudents.map((s) {
+        return RosterEntry(
+          studentId: s.id,
+          fullName: s.fullName,
+          rollNumber: s.rollNumber,
+          status: marksMap[s.id] ?? 'present',
+          remarks: remarksMap[s.id],
+        );
+      }).toList()
+        ..sort(compareRosterEntriesByRoll);
+
       setState(() {
-        _isOfflineRoster = true;
-        _roster = cachedStudents.map((s) {
-          return RosterEntry(
-            studentId: s.id,
-            fullName: s.fullName,
-            rollNumber: s.rollNumber,
-            status: marksMap[s.id] ?? 'present',
-            remarks: remarksMap[s.id],
-          );
-        }).toList();
+        _roster = parsed;
       });
     } else {
       if (mounted && _roster.isEmpty) {
@@ -293,15 +295,24 @@ class _MarkAttendanceScreenState extends State<MarkAttendanceScreen> {
 
     // Save to Offline Persistent Queue (Mobile)
     try {
+      String cleanDate = widget.session.sessionDate.trim();
+      if (cleanDate.contains('T')) cleanDate = cleanDate.split('T')[0];
+      if (cleanDate.contains(' ')) cleanDate = cleanDate.split(' ')[0];
+      final parsed = DateTime.tryParse(cleanDate);
+      if (parsed != null) {
+        cleanDate =
+            "${parsed.year.toString().padLeft(4, '0')}-${parsed.month.toString().padLeft(2, '0')}-${parsed.day.toString().padLeft(2, '0')}";
+      }
+
       final queueId = isOfflineSession
           ? widget.session.id
-          : '${widget.schoolClass.id}_${widget.session.sessionDate}_${widget.session.periodNumber}';
+          : '${widget.schoolClass.id}_${cleanDate}_${widget.session.periodNumber}';
 
       final item = AttendanceSyncQueueItem(
         id: queueId,
         classId: widget.schoolClass.id,
         className: widget.schoolClass.displayName,
-        sessionDate: widget.session.sessionDate,
+        sessionDate: cleanDate,
         periodNumber: widget.session.periodNumber,
         marks: marks,
         shouldClose: _isClosed,
@@ -698,7 +709,7 @@ class _MarkAttendanceScreenState extends State<MarkAttendanceScreen> {
               physics: const BouncingScrollPhysics(),
               slivers: [
                 // Offline Notice Banner if disconnected
-                if (!_connectivity.isOnline || _isOfflineRoster)
+                if (!_connectivity.isOnline)
                   SliverToBoxAdapter(
                     child: Container(
                       margin: const EdgeInsets.symmetric(

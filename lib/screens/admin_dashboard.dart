@@ -92,7 +92,9 @@ class _AdminDashboardState extends State<AdminDashboard> {
           academicYearId: _selectedYear!.id,
           pageSize: 100,
         );
-        _classes = cp.data.map((x) => SchoolClass.fromJson(x)).toList();
+        final parsedClasses = cp.data.map((x) => SchoolClass.fromJson(x)).toList()
+          ..sort(compareSchoolClasses);
+        _classes = parsedClasses;
       } else {
         _classes = [];
       }
@@ -349,7 +351,12 @@ class _AdminDashboardState extends State<AdminDashboard> {
                       ],
                     ),
                   ),
-                Expanded(child: tabs[_selectedIndex]),
+                Expanded(
+                  child: IndexedStack(
+                    index: _selectedIndex,
+                    children: tabs,
+                  ),
+                ),
               ],
             ),
     );
@@ -498,7 +505,7 @@ class _AttendanceSessionsTabState extends State<_AttendanceSessionsTab> {
     try {
       await widget.api.reopenAttendanceSession(s.id);
       widget.snack(
-        'Session for Period ${s.periodNumber} reopened successfully! Teachers can now mark attendance.',
+        'Session reopened successfully! Teachers can now mark attendance.',
         error: false,
       );
       await _loadSessions();
@@ -1053,7 +1060,7 @@ class _AttendanceSessionsTabState extends State<_AttendanceSessionsTab> {
                                             ),
                                           ),
                                           child: Text(
-                                            'Period ${s.periodNumber}',
+                                            '${s.periodNumber}',
                                             style: TextStyle(
                                               fontSize: 11,
                                               fontWeight: FontWeight.w600,
@@ -1578,7 +1585,8 @@ class _ClassesTabState extends State<_ClassesTab> {
           'grade ${c.gradeLevel} section ${c.section} ${c.displayName} ${c.id} $teacherName $teacherPhone'
               .toLowerCase();
       return searchTarget.contains(query);
-    }).toList();
+    }).toList()
+      ..sort(compareSchoolClasses);
 
     final totalPages = (filteredClasses.length / _pageSize).ceil().clamp(
       1,
@@ -1679,7 +1687,7 @@ class _ClassesTabState extends State<_ClassesTab> {
                         child: ListTile(
                           leading: CircleAvatar(child: Text('${c.gradeLevel}')),
                           title: Text(
-                            'Grade ${c.gradeLevel} - Section ${c.section}',
+                            c.displayName,
                             style: const TextStyle(fontWeight: FontWeight.w600),
                           ),
                           subtitle: Column(
@@ -2699,6 +2707,7 @@ class _StudentsTabState extends State<_StudentsTab> {
               s.rollNumber.toLowerCase().contains(query);
         }).toList();
       }
+      fetched.sort(compareStudentsByRoll);
       setState(() {
         _students = fetched;
         _totalPages = res.totalPages;
@@ -5482,7 +5491,8 @@ class _AcademicSessionsTabState extends State<_AcademicSessionsTab> {
         classId: _moveSourceClass!.id,
         pageSize: 100,
       );
-      final students = res.data.map((x) => Student.fromJson(x)).toList();
+      final students = res.data.map((x) => Student.fromJson(x)).toList()
+        ..sort(compareStudentsByRoll);
       setState(() {
         _moveSourceStudents = students;
         _selectedMoveStudentIds = students.map((s) => s.id).toSet();

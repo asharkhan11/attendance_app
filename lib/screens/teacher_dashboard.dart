@@ -190,7 +190,8 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
         if (mounted) {
           final classList = page.data
               .map((x) => SchoolClass.fromJson(x))
-              .toList();
+              .toList()
+            ..sort(compareSchoolClasses);
           setState(() {
             _availableClasses = classList;
             if (_selectedClass == null && _availableClasses.isNotEmpty) {
@@ -217,7 +218,7 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
         }
       } catch (e) {
         AppLogger.w('TeacherDashboard', 'Could not list extra classes: $e');
-        if (_selectedClass != null) {
+        if (_availableClasses.isEmpty && _selectedClass != null) {
           setState(() {
             _availableClasses = [_selectedClass!];
           });
@@ -226,6 +227,17 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
       }
 
       if (_selectedClass != null) {
+        // Proactively pre-cache rosters for assigned classes in background when online
+        if (_connectivity.isOnline) {
+          for (final c in _availableClasses) {
+            _apiService.getClassRoster(c.id, pageSize: 100).then((page) {
+              final students = page.data.map((x) => Student.fromJson(x)).toList();
+              if (students.isNotEmpty) {
+                _storage.cacheClassRoster(c.id, students);
+              }
+            }).catchError((_) {});
+          }
+        }
         await _loadClassDataAndAnalytics();
       } else if (_availableClasses.isEmpty) {
         setState(() {
@@ -256,14 +268,23 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
     final requestDate = _selectedDate;
     final requestPeriod = _selectedPeriod;
     final requestClass = _selectedClass!;
+    final selectedDateStr =
+        "${requestDate.year}-${requestDate.month.toString().padLeft(2, '0')}-${requestDate.day.toString().padLeft(2, '0')}";
+
+    final bool sessionMatches = _activeMarkingSession != null &&
+        _activeMarkingSession!.classId == requestClass.id &&
+        _activeMarkingSession!.sessionDate == selectedDateStr &&
+        _activeMarkingSession!.periodNumber == requestPeriod;
 
     setState(() {
       _loadingAnalytics = true;
       _sessionDiagnosticError = null;
-      _activeMarkingSession = null;
-      _todayPresent = null;
-      _todayAbsent = null;
-      _todayLateExcused = null;
+      if (!sessionMatches) {
+        _activeMarkingSession = null;
+        _todayPresent = null;
+        _todayAbsent = null;
+        _todayLateExcused = null;
+      }
     });
 
     // 0. Pre-load cached roster & summary for immediate display
@@ -328,8 +349,10 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
           final dList = defaultersData is Map
               ? (defaultersData['data'] as List? ?? [])
               : (defaultersData as List? ?? []);
+          final parsedDefaulters = dList.map((x) => Defaulter.fromJson(x)).toList()
+            ..sort(compareDefaultersByRoll);
           setState(() {
-            _defaulters = dList.map((x) => Defaulter.fromJson(x)).toList();
+            _defaulters = parsedDefaulters;
           });
         }
       } catch (e) {
@@ -346,10 +369,12 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
             _selectedDate == requestDate &&
             _selectedPeriod == requestPeriod &&
             _selectedClass?.id == requestClass.id) {
+          final parsedRoster = rosterPage.data
+              .map((x) => Student.fromJson(x))
+              .toList()
+            ..sort(compareStudentsByRoll);
           setState(() {
-            _rosterStudents = rosterPage.data
-                .map((x) => Student.fromJson(x))
-                .toList();
+            _rosterStudents = parsedRoster;
           });
           if (_rosterStudents.isNotEmpty) {
             await _storage.cacheClassRoster(requestClass.id, _rosterStudents);
@@ -381,8 +406,6 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
 
       // 5. Fetch Today's Sessions & Roster Marks for Dynamic Cards
       try {
-        final selectedDateStr =
-            "${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}";
         final sessionsPage = await _apiService.listSessions(
           classId: requestClass.id,
           from: selectedDateStr,
@@ -449,8 +472,6 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
             }
           } else {
             // Check if there is an offline queued session for this slot
-            final selectedDateStr =
-                "${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}";
             final queue = await _storage.getPendingSyncQueue();
             final pendingItem = queue.where((q) =>
                 q.classId == requestClass.id &&
@@ -498,8 +519,6 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
       } catch (e) {
         AppLogger.w('TeacherDashboard', 'Daily sessions list load warning: $e');
         // Offline check
-        final selectedDateStr =
-            "${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}";
         final queue = await _storage.getPendingSyncQueue();
         final pendingItem = queue.where((q) =>
             q.classId == requestClass.id &&
@@ -533,6 +552,21 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
             _todayPresent = pCount;
             _todayAbsent = aCount;
             _todayLateExcused = leCount;
+          });
+        } else if (!kIsWeb && mounted) {
+          final offlineSession = AttendanceSession(
+            id: "offline_${requestClass.id}_${selectedDateStr}_$requestPeriod",
+            classId: requestClass.id,
+            teacherId: '',
+            sessionDate: selectedDateStr,
+            periodNumber: requestPeriod,
+            status: 'open',
+          );
+          setState(() {
+            _activeMarkingSession = offlineSession;
+            _todayPresent = null;
+            _todayAbsent = null;
+            _todayLateExcused = null;
           });
         }
       }
@@ -632,7 +666,6 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
         _navIndex = 1;
         _isStartingSession = false;
       });
-      _loadClassDataAndAnalytics();
       return;
     }
 
@@ -700,7 +733,6 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
             _activeMarkingSession = syntheticSession;
             _navIndex = 1;
           });
-          _loadClassDataAndAnalytics();
         }
       } else {
         AppLogger.e('TeacherDashboard', 'Server connection error on web session creation', error: e);
@@ -1281,30 +1313,6 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
     ];
   }
 
-  Future<void> _reopenSession(String sessionId) async {
-    try {
-      await _apiService.reopenAttendanceSession(sessionId);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Session unlocked! You can now edit attendance.'),
-            backgroundColor: Colors.green,
-          ),
-        );
-        _loadClassDataAndAnalytics();
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to unlock session: $e'),
-            backgroundColor: Colors.redAccent,
-          ),
-        );
-      }
-    }
-  }
-
   Widget _buildSingleControlToolbar(bool isWide) {
     final dailySession = _dailySessions[_selectedPeriod];
     final isClosed = dailySession?.status == 'closed';
@@ -1461,30 +1469,6 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
                                   ),
                                 ],
                               ),
-                              if (isClosed && dailySession != null) ...[
-                                const SizedBox(height: 4),
-                                InkWell(
-                                  onTap: () => _reopenSession(dailySession.id),
-                                  child: const Row(
-                                    children: [
-                                      Icon(
-                                        Icons.lock_open,
-                                        size: 12,
-                                        color: Colors.blue,
-                                      ),
-                                      SizedBox(width: 2),
-                                      Text(
-                                        'Unlock',
-                                        style: TextStyle(
-                                          fontSize: 11,
-                                          color: Colors.blue,
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ],
                             ],
                           ),
                         ),
@@ -1744,15 +1728,7 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
               ),
               const SizedBox(width: 8),
 
-              // 5. Action CTA Button & Unlock Icon
-              if (isClosed && dailySession != null) ...[
-                IconButton(
-                  icon: const Icon(Icons.lock_open, size: 16),
-                  tooltip: 'Unlock Session',
-                  onPressed: () => _reopenSession(dailySession.id),
-                ),
-                const SizedBox(width: 4),
-              ],
+              // 5. Action CTA Button
               SizedBox(
                 height: 40,
                 child: ElevatedButton.icon(
@@ -1903,6 +1879,22 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
           roll.contains(searchQuery) ||
           adm.contains(searchQuery);
     }).toList();
+    students.sort((a, b) {
+      if (a is! Map || b is! Map) return 0;
+      final rollAStr = (a['roll_number'] ?? '').toString().trim();
+      final rollBStr = (b['roll_number'] ?? '').toString().trim();
+      final rollA = int.tryParse(rollAStr);
+      final rollB = int.tryParse(rollBStr);
+      if (rollA != null && rollB != null) {
+        if (rollA != rollB) return rollA.compareTo(rollB);
+      } else if (rollAStr.isNotEmpty || rollBStr.isNotEmpty) {
+        final cmp = rollAStr.compareTo(rollBStr);
+        if (cmp != 0) return cmp;
+      }
+      final nameA = (a['full_name'] ?? a['name'] ?? '').toString();
+      final nameB = (b['full_name'] ?? b['name'] ?? '').toString();
+      return nameA.compareTo(nameB);
+    });
     final daysInMonth = (data['days_in_month'] as num?)?.toInt() ?? 30;
     final monthNames = [
       'January',
